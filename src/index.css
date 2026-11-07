@@ -1,0 +1,4172 @@
+/* Design tokens. Dark is the default set; light overrides via the theme attribute
+   that index.html stamps on <html> before first paint. */
+:root,
+:root[data-theme='dark'] {
+  /* Tells the browser which palette its own UI should use: scrollbars, form
+     controls, the canvas behind the page. Without it those stay light while the
+     page is dark, which is what these six repos shipped. The six soccer/FIBA
+     siblings have always declared it. */
+  color-scheme: dark;
+  --bg: #14121a;
+  --bg-soft: #1c1a24;
+  --card: #1c1a24;
+  --card-hover: #23262d;
+  --border: #2f333b;
+  --text: #f0f1f3;
+  --text-dim: #a7adb8;
+  --text-faint: #767d89;
+
+  /* Chartreuse: no sibling uses it, and it reads at 13.6:1 on this ground. */
+  --accent: #c4ec3a;
+  --accent-ink: #1d2400;
+  --accent-soft: rgba(196, 236, 58, 0.14);
+  --live: #ff4757;
+  --win: #3ddc84;
+  --loss: #ff6b6b;
+  --gold: #f4c542;
+
+  --radius: 2px;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  --page-bg: var(--bg);
+
+  /* Condensed view strip: one fixed-height row (plus the notch inset on phones),
+     declared as a token so the sticky filter bar / month jump-bar can offset
+     beneath it and scroll-margins can clear it without any JS measuring. */
+  --view-strip-h: calc(44px + env(safe-area-inset-top, 0px));
+
+  /* Added with the family's results-board system: a rule color distinct from
+     the border, a structural blue for day bands and round plates, and flat
+     signal colors that mean an outcome and nothing else. */
+  --rule: #3a3f49;
+  --court: #6f9fe0;
+  --court-deep: #2e5fa3;
+  --through: #4bb37a;
+  --out: #e06561;
+  --silver: #aeb6c2;
+  --font: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --shadow: none;
+  --shadow-float: 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #e7e8ea;
+  --bg-soft: #f4f5f6;
+  --card: #ffffff;
+  --card-hover: #f4f5f6;
+  --border: #ccced3;
+  --text: #101317;
+  --text-dim: #4a515c;
+  --text-faint: #767d89;
+
+  /* The same hue darkened for a light ground: 5.1:1 on --bg, 6.3:1 under white ink. */
+  --accent: #4b6a00;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(75, 106, 0, 0.1);
+  --live: #d92c3c;
+  --win: #17924f;
+  --loss: #cc3b3b;
+  --gold: #a9760a;
+
+  --shadow: 0 4px 16px rgba(20, 35, 60, 0.1);
+  --page-bg: var(--bg);
+
+  --rule: #b9bcc3;
+  --court: #2e5fa3;
+  --court-deep: #1e4278;
+  --through: #17683f;
+  --out: #a62a25;
+  --silver: #5b6270;
+  --shadow: none;
+  --shadow-float: 0 18px 40px rgba(16, 19, 23, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  background-image: var(--page-bg);
+  color: var(--text);
+  font: 15px/1.5 var(--font);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The display voice: the SAME family, pushed wide and heavy. One typeface used
+   at two extremes reads as two, without the mismatch of an actual second face.
+   Reserved for numerals and for headings that name a thing. */
+.brand h1,
+.day-fold,
+.time,
+.side-score,
+.tot,
+.st-pts {
+  font-stretch: 118%;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.app {
+  max-width: 1080px;
+  margin: 0 auto;
+  /* Reserve the iOS status-bar / notch space. The page opts into the full screen
+     (viewport-fit=cover + a translucent status bar), so without this the title slides
+     under the clock on a phone. env() is 0 where there's no inset (desktop). */
+  padding: calc(22px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px))
+    64px calc(18px + env(safe-area-inset-left, 0px));
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--text-dim);
+}
+.pos {
+  color: var(--win);
+}
+.neg {
+  color: var(--loss);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+/* The masthead of a results board: the name set wide and heavy on the same left
+   edge every row below it uses, over a single heavy rule. */
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  border-bottom: 3px solid var(--text);
+  padding-bottom: 12px;
+}
+
+.brand h1 {
+  font-size: clamp(22px, 5vw, 30px);
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+}
+
+.season {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.tagline {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 13.5px;
+}
+
+/* The timezone, stated once here so the per-row zone token can stay recessive. */
+.tz-abbr {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.live-now {
+  color: var(--live);
+  font-weight: 600;
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--live);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.top-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A <select> is sized by its widest option ("Golden State Valkyries", "Central
+   Europe"), which overflows a narrow phone. Applied to every .field rather than
+   per-container, so a new filter can't reintroduce the overflow. */
+.field {
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+.field select {
+  max-width: 100%;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────── */
+select,
+.ghost,
+.chip,
+.view-btn,
+.seg button {
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+select:hover,
+.ghost:hover,
+.chip:hover,
+.view-btn:hover,
+.seg button:hover {
+  background: var(--card-hover);
+}
+
+.ghost {
+  width: 38px;
+  padding: 7px 0;
+  text-align: center;
+}
+
+.ghost.on,
+.chip.on,
+.seg button.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.views {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* Views are TABS on the masthead rule, not filled capsules: a rule carries the
+   state, the same way a day band does. The .views row shares the control
+   styling above, so the tab treatment is stated here rather than fought for. */
+.views .view-btn {
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  margin-bottom: -3px;
+  color: var(--text-dim);
+}
+.views .view-btn:hover {
+  background: transparent;
+  color: var(--text);
+  border-bottom-color: var(--rule);
+}
+.view-btn.on,
+.views .view-btn.on {
+  background: transparent;
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ── Condensed view strip ───────────────────────────────────────────────
+   Appears (position: fixed, so nothing reflows mid-scroll) once the in-flow
+   .views nav leaves the viewport. Fixed height --view-strip-h; the expanded
+   tab set overlays as a dropdown so the strip itself never grows. While it's
+   up, .nav-away pushes the sticky filter bar and month jump-bar down by the
+   same token, and the .day/.month scroll-margins always reserve for it. */
+.view-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--view-strip-h);
+  padding-top: env(safe-area-inset-top, 0px);
+  z-index: 30;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.view-strip-inner {
+  position: relative;
+  max-width: 1080px;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 calc(18px + env(safe-area-inset-right, 0px)) 0
+    calc(18px + env(safe-area-inset-left, 0px));
+}
+
+.view-strip-toggle {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.view-strip-toggle:hover { color: var(--accent); }
+.view-strip-toggle .chev {
+  font-size: 0.7em;
+  color: var(--text-faint);
+}
+
+.view-strip-tabs {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px calc(18px + env(safe-area-inset-right, 0px)) 12px
+    calc(18px + env(safe-area-inset-left, 0px));
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  /* Top-aligned so the controls beside the search stay level with the input when
+     its example chips drop in on focus, rather than centering against the taller
+     group. */
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+/* ── Collapsible + sticky filter bar ────────────────────────────────────
+   The outer bar pins to the top of the viewport (z-index above the schedule's
+   own sticky .month-jump) with a solid background so the controls stay reachable
+   as the schedule scrolls. Its measured height is published as --filter-bar-h
+   (see App.jsx) so .month-jump can stick directly beneath it, not behind it. */
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: 8px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+/* While the condensed view strip is up, pin beneath it instead of behind it. */
+.nav-away .filter-bar {
+  top: var(--view-strip-h);
+}
+
+.filter-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-toggle {
+  gap: 8px;
+}
+
+/* Count of filters currently narrowing the schedule. */
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.filter-toggle.on .filter-badge {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chev {
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.filter-clear {
+  color: var(--text-dim);
+}
+.filter-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filters-panel {
+  margin-top: 10px;
+}
+
+.filters-panel .filters {
+  margin-bottom: 0;
+}
+
+/* The search field plus its example chips. Carries the flex the search-field
+   used to, so the row still gives the search the room it had. */
+.search-group {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.search-field {
+  display: block;
+  width: 100%;
+}
+
+.search {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 7px 12px;
+}
+
+.search::placeholder {
+  color: var(--text-faint);
+}
+
+/* The example chips are hidden until the search area is in use, then revealed
+   under the field. :focus-within on the shared group keeps them up while a chip
+   itself holds focus, so a chip click lands before they close. */
+.search-hints {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+.search-group:focus-within .search-hints {
+  display: flex;
+}
+
+.hint-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.hint-chip {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 2px;
+  border: 1px dashed var(--border);
+  background: var(--card);
+  color: var(--accent);
+  cursor: pointer;
+}
+.hint-chip:hover {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.hint-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: 4px;
+}
+
+/* Season-phase chips: multi-select, empty = all phases shown. */
+.phase-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.phase-chip {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.phase-chip:hover {
+  background: var(--card-hover);
+}
+.phase-chip.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 2px;
+}
+
+/* The "Later games" expander at the foot of the default schedule list. */
+.later-toggle {
+  display: block;
+  margin: 14px auto 4px;
+}
+
+/* Count of what's hidden behind a toggle. */
+.chip-count {
+  background: var(--bg-soft);
+  border-radius: 2px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip.on .chip-count {
+  background: var(--card);
+  color: var(--accent);
+}
+
+.seg {
+  display: flex;
+  gap: 0;
+}
+.seg button {
+  border-radius: 0;
+}
+.seg button:first-child {
+  border-radius: 2px 0 0 10px;
+}
+.seg button:last-child {
+  border-radius: 0 10px 10px 0;
+  border-left: 0;
+}
+
+/* ── Views ──────────────────────────────────────────────────────────── */
+.view-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.view-head h2 {
+  font-size: 20px;
+}
+
+.sub {
+  margin: 5px 0 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  max-width: 60ch;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px 6px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.grid-2 {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  /* Cards size to their own content instead of stretching to the tallest sibling. */
+  align-items: start;
+}
+
+/* A grid item's automatic minimum size is min-content, so a card holding a wide
+   table refuses to shrink and pushes the page sideways — its inner
+   overflow-x:auto never gets the chance to scroll. min-width:0 hands the clipping
+   back to .table-scroll. */
+.grid-2 > * {
+  min-width: 0;
+}
+
+.empty {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 48px 16px;
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+/* ── Logos ──────────────────────────────────────────────────────────── */
+.logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: var(--logo-size);
+  height: var(--logo-size);
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* One variant per theme, swapped in CSS so there's no re-render on toggle. */
+:root[data-theme='dark'] .logo-light,
+:root[data-theme='light'] .logo-dark {
+  display: none;
+}
+
+/* ── Standings ──────────────────────────────────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.standings {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  font-weight: 600;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.standings td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.standings tr:last-child td {
+  border-bottom: 0;
+}
+
+.standings .num {
+  text-align: right;
+}
+
+.col-rank {
+  width: 52px;
+}
+
+.rank {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-left: 2px;
+}
+
+.star {
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 13px;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.star:hover {
+  transform: scale(1.2);
+}
+.star.on {
+  color: var(--gold);
+}
+
+.team-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.team-btn:hover .team-nick {
+  color: var(--accent);
+}
+
+.team-loc {
+  color: var(--text-dim);
+}
+
+.team-nick {
+  font-weight: 600;
+}
+
+.row-followed {
+  background: var(--accent-soft);
+}
+
+.row-elim {
+  opacity: 0.55;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  line-height: 1.4;
+}
+.badge-in {
+  background: rgba(61, 220, 132, 0.16);
+  color: var(--win);
+}
+.badge-out {
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--loss);
+}
+
+/* Standings legend — spells out the clinch badges for readers who can't hover
+   the tooltips (i.e. everyone on a phone). */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 2px 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-star {
+  color: var(--gold);
+}
+
+/* Possible-finish range: quiet until it collapses to a locked seed. */
+.finish {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.finish-locked {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.streak {
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.streak-w {
+  color: var(--win);
+}
+.streak-l {
+  color: var(--loss);
+}
+
+.l10 {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.l10 i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+.l10-w {
+  background: var(--win);
+}
+.l10-l {
+  background: var(--border);
+}
+
+.cutline td {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.cutline span {
+  display: block;
+  margin: 4px 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-top: 2px dashed var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ── Schedule ───────────────────────────────────────────────────────── */
+/* ---------- Next / Live banner ---------- */
+.nextgame {
+  background: linear-gradient(135deg, var(--bg-soft), var(--card));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+.nextgame.is-live { border-color: var(--live); }
+.nextgame.done { text-align: center; color: var(--text-dim); font-weight: 600; }
+.nextgame-stack { display: flex; flex-direction: column; gap: 8px; }
+.nm-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.nm-stage {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
+}
+.nm-teams {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+.nm-v { color: var(--text-faint); font-size: 0.85rem; font-style: italic; font-weight: 400; }
+.nm-bottom {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.nm-countdown { display: inline-flex; gap: 6px; align-items: baseline; }
+.nm-countdown b {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 3px 7px;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.nm-countdown b small { font-size: 0.62rem; color: var(--text-faint); margin-left: 1px; }
+.nm-countdown.live { color: var(--live); font-weight: 700; }
+.nm-when { color: var(--text-dim); font-size: 0.85rem; }
+.nm-live-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.nm-live-row:hover { border-color: var(--accent); }
+.nm-live-row .nm-when { margin-left: auto; overflow-wrap: anywhere; }
+.nm-stack-bottom { margin-top: 2px; }
+.nm-jump {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 2px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.day {
+  margin-bottom: 22px;
+  /* Land below ALL the pinned bars (condensed view strip + filter bar + full-season
+     month jump-bar) so a "Today"/day jump doesn't scroll the day heading behind them.
+     --month-jump-h is 0 in recent mode, where the jump-bar isn't rendered; the strip
+     allowance is reserved even before the strip appears, because a landing/jump scroll
+     is exactly what summons it a frame later. */
+  scroll-margin-top: calc(
+    var(--view-strip-h) + var(--filter-bar-h, 0px) + var(--month-jump-h, 0px) + 12px
+  );
+}
+
+.day-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 15px;
+  padding-bottom: 6px;
+  margin-bottom: 0;
+  border-bottom: 2px solid var(--court);
+}
+
+.day.is-today .day-head {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* The day label is the fold control; the count stays put and the eye sits at the end,
+   so the header keeps the same shape it had before it became interactive. */
+.day-fold {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-right: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.day-fold:hover { color: var(--accent); }
+.day-caret { font-size: 0.8em; color: var(--text-faint); }
+.day-eye {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 0.95em;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.day-eye:hover,
+.day-eye[aria-pressed='true'] { opacity: 1; }
+
+.day-count {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.day-games {
+  display: grid;
+  gap: 10px;
+}
+
+/* Full-season navigation: a sticky month jump-bar over collapsible month sections. */
+.month-jump {
+  position: sticky;
+  /* Pins directly beneath the sticky .filter-bar (its live height, published by
+     App.jsx) rather than colliding with it at the very top. z-index stays below the
+     filter bar so, on the frame before the height updates, the outer bar wins. */
+  top: var(--filter-bar-h, 0px);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+/* Same strip offset as the filter bar while the condensed view strip is up. */
+.nav-away .month-jump {
+  top: calc(var(--view-strip-h) + var(--filter-bar-h, 0px));
+}
+
+.month-chip {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.month-chip:hover {
+  background: var(--card-hover);
+}
+
+.month-chip.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* "Top" + "Today" jumps sit as a pair at the far right of the bar. */
+.month-top,
+.month-today {
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.month-top {
+  margin-left: auto;
+}
+
+.month {
+  margin-bottom: 14px;
+  /* A month-chip jump scrolls a .month to the top; clear all the pinned bars too. */
+  scroll-margin-top: calc(
+    var(--view-strip-h) + var(--filter-bar-h, 0px) + var(--month-jump-h, 0px) + 12px
+  );
+}
+
+.month-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.month-head:hover {
+  background: var(--card-hover);
+}
+
+.month-head.open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.month-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.month-days {
+  padding: 16px 2px 4px;
+}
+
+/* A row, not a card. The left column is the scoreboard rail: tip-off in the
+   viewer's own zone, set big and tabular, divided from the game by a rule that
+   runs the full height. Ten rows read as one board rather than ten boxes. */
+.game {
+  display: grid;
+  grid-template-columns: 126px 1fr;
+  gap: 16px;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 13px 4px 13px 0;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.game:hover {
+  background: var(--card-hover);
+}
+
+/* Live is the one state worth interrupting the grid for. */
+.game.state-live {
+  box-shadow: inset 3px 0 0 var(--live);
+  padding-left: 12px;
+  background: var(--card);
+}
+
+.game.state-void {
+  opacity: 0.6;
+}
+
+/* A playoff slot still waiting on an opponent: nothing to open, so no pointer or hover. */
+.game.pending {
+  cursor: default;
+}
+.game.pending:hover {
+  background: transparent;
+}
+/* "Time TBD" at the 20px tip size overflows the 96px when-column. */
+.time.time-tbd {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.side-tbd .side-nick {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.game-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 1px;
+  padding-right: 16px;
+  border-right: 1px solid var(--rule);
+  align-self: stretch;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.time {
+  font-size: 20px;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.zone,
+.day-count {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.live-badge {
+  color: var(--live);
+  font-weight: 700;
+  font-size: 12.5px;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.final-badge {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.void-badge {
+  font-size: 12px;
+  color: var(--gold);
+}
+
+.pregame-badge {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--live);
+  opacity: 0.85;
+}
+
+.game-teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  /* Cap the matchup and center it so away and home stay associated instead of
+     pinning to opposite screen edges on wide desktops. The row rule lives on
+     .game, so it still spans full width; only the teams block is reined in. */
+  width: 100%;
+  max-width: 44rem;
+  justify-self: center;
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.side:last-child {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.side-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.side-loc {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.side-nick {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-score {
+  font-size: 23px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  margin-inline: auto 0;
+}
+
+.side:last-child .side-score {
+  margin-inline: 0 auto;
+}
+
+.side.winner .side-score,
+.side.winner .side-nick {
+  color: var(--text);
+}
+
+.side.winner .side-score {
+  color: var(--accent);
+}
+
+.side.followed .side-nick {
+  color: var(--gold);
+}
+
+/* The star sits inside a clickable card, so it needs its own hit area. */
+.side .star {
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 5px;
+  order: -1;
+}
+
+.side:last-child .star {
+  order: 1;
+}
+
+.side .star:hover {
+  background: var(--bg-soft);
+}
+
+.at {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.game-meta {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  /* Align the meta under the capped, centered matchup above it. */
+  width: 100%;
+  max-width: 44rem;
+  justify-self: center;
+}
+
+.note {
+  color: var(--gold);
+}
+
+.countdown {
+  color: var(--accent);
+}
+
+/* ── All-Star card ──────────────────────────────────────────────────── */
+/* A gold-tinted card that reads as an event, not one of the 15-team matchups
+   (its captain-drafted sides have no logos). */
+.game.allstar {
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--border));
+  background: color-mix(in srgb, var(--gold) 7%, var(--card));
+}
+
+.allstar-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.allstar-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+}
+
+.allstar-matchup {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.allstar-vs {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.allstar-score {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.md-allstar-mark {
+  font-size: 40px;
+  line-height: 1;
+}
+
+/* Games the owner can actually watch (YouTube TV / Prime Video / Peacock). The
+   green matches --win: it reads as "available" without competing with the
+   orange UI accent. */
+.watch {
+  display: inline-flex;
+  align-items: center;
+  /* Wrap so every selected service that carries the game stays visible — a viewer
+     with many services on a national game can match five-plus at once. */
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--win);
+}
+
+.watch-tv {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.watch-chip {
+  border: 1px solid color-mix(in srgb, var(--win) 45%, transparent);
+  border-radius: 2px;
+  padding: 1px 7px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/* In the detail modal the badge trails the full network list, so give it room. */
+.md-facts .watch {
+  margin-left: 8px;
+}
+
+/* ── Stats ──────────────────────────────────────────────────────────── */
+/* Data-mark colors are separate from --accent on purpose: the orange is UI
+   chrome (buttons, active states) and never encodes data, so a mark is never
+   confused for a control. The diverging pair below is the validated blue↔red,
+   checked against these exact card surfaces in both themes. */
+:root,
+:root[data-theme='dark'] {
+  --viz-pos: #3987e5;
+  --viz-neg: #e66767;
+  --viz-bar: #3987e5;
+  --viz-zero: #383835;
+}
+
+:root[data-theme='light'] {
+  --viz-pos: #2a78d6;
+  --viz-neg: #e34948;
+  --viz-bar: #2a78d6;
+  --viz-zero: #c3c2b7;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fine {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  margin: 8px 0 10px;
+}
+
+.fine.top {
+  margin-top: -4px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 11px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.tile-btn {
+  cursor: pointer;
+}
+
+.tile-btn:hover,
+.tile.open {
+  border-color: var(--accent);
+}
+
+.tile-value {
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-label {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.tile-sub {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.tile-caret {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.drill {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.drill li {
+  padding: 0;
+}
+
+/* A drill row that is NOT wrapped in a `.drill-row` (a plain, non-clickable list,
+   e.g. TeamPanel's "Next up" and GameDetail's season series) still needs the row
+   layout, or its cells collapse to inline flow: the fixed-width date and the
+   margin-left:auto note both no-op, and everything squishes together. Scope it to
+   unwrapped rows so the clickable `.drill-row` lists are untouched. */
+.drill li:not(:has(> .drill-row)) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+}
+
+/* The row is a button when the caller wires one, a plain span otherwise. */
+.drill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 2px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.drill-row {
+  cursor: pointer;
+}
+
+button.drill-row:hover {
+  background: var(--card-hover);
+}
+
+.drill-date {
+  color: var(--text-dim);
+  width: 82px;
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.drill-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.drill-note {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  flex: 0 0 auto;
+}
+
+/* Opponent name in a Next-up row: take the middle space and truncate rather than
+   crowd the time out to the edge in a narrow modal. */
+.drill-team {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Category switcher — one category shown at a time, so the chart is a single
+   series and needs no legend. */
+.cats {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cat {
+  font: inherit;
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.cat:hover {
+  color: var(--text);
+}
+
+.cat.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.leaders {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.leaders td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.leaders tr:last-child td {
+  border-bottom: 0;
+}
+
+.lead-rank {
+  width: 22px;
+  text-align: right;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A traded player carries one badge per club, so this cell is a row, not a single logo. */
+.lead-teams {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.lead-arrow {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.lead-team button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+}
+
+.lead-name {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* The player name opens the player pop-out; styled as an inline name, not a button. */
+.lead-player {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 500;
+  color: inherit;
+  cursor: pointer;
+}
+
+.lead-player:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.lead-pos {
+  color: var(--text-faint);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.lead-bar {
+  width: 45%;
+  min-width: 60px;
+}
+
+/* 4px rounded data-end, anchored to the baseline. */
+.bar {
+  display: block;
+  height: 9px;
+  width: var(--w);
+  background: var(--viz-bar);
+  border-radius: 0 4px 4px 0;
+}
+
+.lead-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  width: 54px;
+}
+
+/* Diverging: bars grow out from a shared zero line. */
+.margin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.margin-row {
+  display: grid;
+  grid-template-columns: 108px 1fr 82px;
+  align-items: center;
+  gap: 8px;
+}
+
+.margin-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.margin-team span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.margin-team:hover span {
+  color: var(--accent);
+}
+
+.margin-track {
+  position: relative;
+  height: 18px;
+}
+
+.margin-zero {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--viz-zero);
+}
+
+.margin-bar {
+  position: absolute;
+  top: 4px;
+  height: 10px;
+  /* --arm-scale shrinks the arms on a narrow track so the value label always clears
+     the longest bar; it's 1 on desktop (see the mobile override). */
+  width: calc(var(--w) * var(--arm-scale, 1));
+}
+
+.margin-bar.pos {
+  left: 50%;
+  background: var(--viz-pos);
+  border-radius: 0 4px 4px 0;
+}
+
+.margin-bar.neg {
+  right: 50%;
+  background: var(--viz-neg);
+  border-radius: 4px 0 0 4px;
+}
+
+.margin-label {
+  position: absolute;
+  top: 1px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+/* Anchored past the end of its own bar, reading the same --w the bar does, but
+   clamped so a long bar in a narrow track can't push the label out of the card.
+   The reserve matches the widest label ("−10.0"). */
+.margin-label.pos {
+  left: min(calc(50% + var(--w, 0%) * var(--arm-scale, 1) + 6px), calc(100% - 34px));
+}
+
+.margin-label.neg {
+  right: min(calc(50% + var(--w, 0%) * var(--arm-scale, 1) + 6px), calc(100% - 34px));
+}
+
+.margin-split {
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.margin-split i {
+  font-style: normal;
+  opacity: 0.5;
+  margin: 0 3px;
+}
+
+/* Status always ships icon + word, never color alone. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.status i {
+  font-style: normal;
+}
+
+.st-good {
+  color: var(--win);
+  font-weight: 600;
+}
+.st-out {
+  color: var(--text-faint);
+}
+.st-in {
+  color: var(--viz-pos);
+}
+.st-chase {
+  color: var(--text-dim);
+}
+
+.race td {
+  padding: 6px 8px;
+}
+
+/* ── Week ───────────────────────────────────────────────────────────── */
+.wk-nav {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.wk-nav .ghost:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.wk {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.wk-col {
+  min-width: 0;
+}
+
+.wk-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.wk-dow {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.wk-date {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.wk-head.is-today {
+  border-bottom-color: var(--accent);
+}
+
+.wk-head.is-today .wk-dow,
+.wk-head.is-today .wk-date {
+  color: var(--accent);
+}
+
+.wk-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 44px;
+}
+
+.wk-game {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 7px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.wk-game:hover {
+  background: var(--card-hover);
+  border-color: var(--accent);
+}
+
+.wk-game.is-mine {
+  border-color: var(--gold);
+}
+
+.wk-game.is-live {
+  border-color: var(--live);
+}
+
+.wk-game.wk-allstar {
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--border));
+  background: color-mix(in srgb, var(--gold) 8%, var(--card));
+}
+
+.wk-allstar-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+
+.wk-allstar-teams {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.wk-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.wk-abbr {
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wk-pts {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.wk-pts.won {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.wk-time {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+/* Seven columns don't fit a phone; stack into a two-column agenda instead. */
+@media (max-width: 720px) {
+  .wk {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .wk-head {
+    justify-content: flex-start;
+  }
+}
+
+/* ── Bracket ────────────────────────────────────────────────────────── */
+.banner {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 9px 13px;
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+.banner-champ {
+  background: rgba(244, 197, 66, 0.14);
+  border-color: var(--gold);
+  font-size: 15px;
+}
+
+.bx {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.bx-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.bx-round {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+  text-align: center;
+  font-weight: 600;
+}
+
+.bx-series {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 7px 8px 5px;
+}
+
+.bx-series.is-live {
+  border-color: var(--live);
+}
+
+.bx-series.is-proj {
+  border-style: dashed;
+}
+
+.bx-col-final .bx-series {
+  border-color: var(--gold);
+}
+
+.bx-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 2px;
+}
+
+.bx-side + .bx-side {
+  border-top: 1px solid var(--border);
+}
+
+.bx-seed {
+  font-size: 10px;
+  color: var(--text-faint);
+  width: 12px;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.bx-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+  flex: 1;
+}
+
+.bx-name {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bx-team:hover .bx-name {
+  color: var(--accent);
+}
+
+.bx-wins {
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.bx-won .bx-name {
+  font-weight: 700;
+}
+
+.bx-won .bx-wins {
+  color: var(--accent);
+}
+
+.bx-lost {
+  opacity: 0.5;
+}
+
+.bx-side.followed .bx-name {
+  color: var(--gold);
+}
+
+.bx-empty {
+  min-height: 30px;
+}
+
+.bx-feeder {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.bx-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 5px;
+  margin-top: 3px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+
+.bx-live {
+  color: var(--live);
+  font-weight: 700;
+}
+
+.dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.dots i,
+.dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* A played dot is a button onto that game's box score. Visually identical to the old
+   inert dot — only the cursor and a focus ring say it's live — but with a real touch
+   target so it's tappable on a phone. */
+.dots .dot {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  appearance: none;
+}
+
+.dots .dot::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.dots .dot:hover,
+.dots .dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dot-w {
+  background: var(--viz-pos);
+}
+.dot-l {
+  background: var(--viz-neg);
+}
+/* Spoiler-free mode: a played game with no win/loss colour. */
+.dot-empty {
+  border: 1px solid var(--border);
+}
+
+.bx-field {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  columns: 2;
+  font-size: 13px;
+}
+
+.bx-field li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 0;
+  break-inside: avoid;
+}
+
+.bx-field-seed {
+  width: 16px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bx-field .dim {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Radial bracket ─────────────────────────────────────────────────── */
+.rb {
+  position: relative;
+  width: min(100%, 620px);
+  aspect-ratio: 1;
+  margin: 0 auto 16px;
+}
+
+.rb-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rb-lines line {
+  stroke: var(--border);
+  stroke-width: 0.4;
+}
+
+.rb-ring {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 0.2;
+  opacity: 0.5;
+}
+
+.rb-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  padding: 5px;
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s, transform 0.15s;
+}
+
+.rb-node:hover {
+  border-color: var(--accent);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.rb-node.is-dim {
+  opacity: 0.32;
+}
+
+.rb-node.followed {
+  border-color: var(--gold);
+  border-width: 2px;
+}
+
+.rb-node.is-empty {
+  cursor: default;
+  background: var(--bg-soft);
+}
+
+.rb-tbd {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.rb-seed {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.rb-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--gold);
+}
+
+.rb-trophy {
+  font-size: 30px;
+}
+
+.rb-champ {
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .bx {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .bx-col-final {
+    order: -1;
+  }
+}
+
+/* ── Game detail modal ──────────────────────────────────────────────── */
+.modal-wrap {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* Pin to the visible viewport, not the layout viewport. On iOS Safari
+     `100vh` is the large viewport (toolbars hidden), so a centered full-height
+     modal has its top, and the close button, pushed behind the address bar.
+     `100dvh` tracks the actually-visible height; the vh line is the fallback. */
+  height: 100vh;
+  height: 100dvh;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  overflow-y: auto;
+}
+
+.modal {
+  position: relative;
+  width: min(100%, 560px);
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px 20px;
+}
+
+/* On a desktop-sized viewport, widen the game-detail modal (only) so a full box
+   score fits without horizontal scrolling. It stays full-width on phones, and
+   the calendar/services/player modals keep their own narrower widths. */
+@media (min-width: 760px) {
+  .modal.game-modal {
+    width: min(96vw, 900px);
+  }
+}
+
+.modal-x {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 2px;
+}
+
+.modal-x:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+/* ── Calendar modal ─────────────────────────────────────────────────── */
+.cal-modal { width: min(100%, 480px); }
+.cal-title { margin: 0 0 14px; }
+.cal-hint {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.cal-section { border-top: 1px solid var(--border); padding-top: 12px; margin-bottom: 12px; }
+.cal-section h4 { margin: 0 0 8px; font-size: 0.82rem; color: var(--text); }
+.cal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+.cal-row-label { font-weight: 600; font-size: 0.9rem; }
+.cal-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.cal-btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.cal-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border-radius: 2px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+.cal-btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+.cal-note { font-size: 0.74rem; color: var(--text-faint); margin: 8px 0 0; line-height: 1.5; }
+.cal-downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+.cal-downloads button {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 13px;
+  border-radius: 2px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.cal-downloads button:hover { border-color: var(--accent); }
+
+/* ── My-services picker ─────────────────────────────────────────────── */
+/* The filter toggle and its ⚙ editor read as one control. */
+.chip-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.chip-icon {
+  padding: 7px 10px;
+}
+
+.svc-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 460px) {
+  .svc-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.svc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+  background: var(--card);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.svc-item:hover {
+  border-color: var(--accent);
+}
+
+.svc-item.on {
+  border-color: var(--win);
+  background: color-mix(in srgb, var(--win) 12%, transparent);
+}
+
+.svc-item input {
+  accent-color: var(--win);
+  cursor: pointer;
+}
+
+.svc-name {
+  flex: 1;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.svc-kind {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+/* Collapsible shelf of market-dependent channels. The summary keeps the browser's
+   native disclosure marker (block layout — flex would remove it). */
+.svc-local {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.svc-local summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.svc-local .cal-note {
+  margin-top: 6px;
+}
+
+.svc-local .svc-list {
+  margin-top: 8px;
+}
+
+.svc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.svc-foot-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.md-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.md-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 96px;
+}
+
+.md-score {
+  font-size: 27px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.md-time {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-state {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Per-game score reveal in spoiler-free mode. */
+.md-reveal {
+  margin-top: 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.md-facts {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0 0;
+}
+
+.md-facts > div {
+  display: grid;
+  /* Wide enough for the longest label ("ATTENDANCE") so it can't collide with its
+     value; alignment stays consistent because every row shares the column. */
+  grid-template-columns: 86px 1fr;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.md-facts dt {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 1px;
+}
+
+.md-facts dd {
+  margin: 0;
+}
+
+/* Tabs split the detail so the modal isn't one long scroll. */
+.md-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.md-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.md-tab:hover {
+  color: var(--text);
+}
+.md-tab.on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+/* The tab bar already sets the gap, so the panel's first heading shouldn't add more. */
+.md-panel > .md-sub:first-child,
+.md-panel > section:first-child .md-sub {
+  margin-top: 12px;
+}
+
+/* Line score */
+.linescore {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.linescore th {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-weight: 600;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.linescore tbody th {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 6px 8px 6px 0;
+}
+
+.linescore td {
+  padding: 6px 8px;
+  text-align: center;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}
+
+/* The higher scorer of each quarter, so the row reads as momentum. */
+.linescore .q-won {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.linescore .q-total {
+  font-weight: 700;
+  color: var(--text);
+  border-left: 1px solid var(--border);
+}
+
+/* Game leaders */
+/* Two fixed halves gave each team about 160px on a phone, which left the name 81px, and
+   any name past about 12 characters was cut ("S. Gilgeous-Alexander" needs 125px). The
+   teams sit side by side only when each half can be 220px (the desktop pop-out) and
+   stack otherwise. Same structure as the NFL viewer, whose long stat lines need 300px. */
+.leaders-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 10px;
+}
+
+/* ── Starting lineups ───────────────────────────────────────────────── */
+.lineups {
+  margin-top: 14px;
+}
+.lu-note {
+  font-size: 12.5px;
+  margin: 2px 0 0;
+}
+.lu-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.lu-side {
+  background: var(--bg-soft);
+  border-radius: 2px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.lu-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding-bottom: 5px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.lu-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lu-player {
+  display: grid;
+  grid-template-columns: 22px 1fr auto auto;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+.lu-jersey {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.lu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lu-pos {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lu-line {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+.lu-bench {
+  margin-top: 6px;
+}
+.lu-bench summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 2px 0;
+}
+.lu-bench summary:hover {
+  color: var(--text);
+}
+
+/* ── Box score ──────────────────────────────────────────────────────── */
+/* The two teams stack (each table is wide); each scrolls horizontally on its own
+   inside .table-scroll rather than pushing the modal sideways. */
+.box-sides {
+  display: grid;
+  /* minmax(0, 1fr) and the min-width below are both load-bearing on a phone: a grid
+     item's min-width defaults to its content, so the scroll box would be sized to
+     the table rather than the modal and the modal would overflow sideways. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+.box-team {
+  min-width: 0;
+}
+/* Scroll cue, CSS only, on the box's own wrapper (.table-scroll is shared with the
+   standings and history). The two `local` gradients ride the content and cover the
+   shadow beneath them at each end; the two `scroll` shadows are fixed to the box. So
+   a shadow shows exactly when there is more table that way, with nothing measuring
+   scrollLeft. Tinted from --text, so it reads in both themes. */
+.bx-scroll {
+  overflow-y: clip;
+  background:
+    linear-gradient(to right, var(--card), transparent) 0 0 / 16px 100% no-repeat local,
+    linear-gradient(to left, var(--card), transparent) 100% 0 / 16px 100% no-repeat local,
+    radial-gradient(
+        farthest-side at 0 50%,
+        color-mix(in srgb, var(--text) 22%, transparent),
+        transparent
+      )
+      0 0 / 7px 100% no-repeat scroll,
+    radial-gradient(
+        farthest-side at 100% 50%,
+        color-mix(in srgb, var(--text) 22%, transparent),
+        transparent
+      )
+      100% 0 / 7px 100% no-repeat scroll;
+}
+/* Heading and the stat toggle on one line. */
+.bx-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bx-section-head .md-sub {
+  margin-bottom: 8px;
+}
+/* Shown only on a phone: above the breakpoint every column already fits. */
+.bx-more {
+  display: none;
+  background: var(--card-2, var(--bg-soft, var(--card)));
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bx-more:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.box-team .lu-head {
+  margin-bottom: 6px;
+}
+.boxscore {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.boxscore th,
+.boxscore td {
+  padding: 4px 7px;
+  text-align: right;
+}
+.boxscore thead th {
+  color: var(--text-faint);
+  font-weight: 600;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+}
+/* Player names stay put while the stat columns scroll under them on a phone. */
+.boxscore .bx-name {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--card);
+  min-width: 116px;
+  z-index: 1;
+}
+/* The column labels stay put while the rows scroll under them.
+   MEASURED in the FIBA sibling, because it is not what it looks like: sticky
+   resolves against the nearest ancestor SCROLL CONTAINER in either axis. The
+   wrapper has `overflow-x: auto`, so it is that container, it never scrolls
+   vertically, and `top: 0` is inert. So the wrapper stops being a scroll container
+   in exactly the state where it has nothing to scroll, the compact phone table (see
+   the phone block at the end of this file), and the header sticks to the modal,
+   which is the real vertical scroller. "More stats" brings horizontal scrolling
+   back and the pin goes with it, which is the deliberate trade of that mode. */
+.boxscore thead th {
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 2;
+}
+.boxscore thead th.bx-name {
+  z-index: 3;
+}
+/* The modal pads 18px at the top, and a sticky top:0 pins to the CONTENT box, so
+   rows would scroll through that strip ABOVE the pinned labels. This curtain paints
+   the strip in the modal's own background. NOT a box-shadow, which is the obvious
+   way and does not work: the table is `border-collapse: collapse`, and Chrome does
+   not paint box-shadow on a cell in the collapsed border model. */
+.boxscore thead th::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 22px;
+  background: var(--card);
+}
+/* Opaque and above the curtain: unscrolled, the curtain reaches up into this band,
+   and without its own background the team name would be painted over. */
+.box-team .lu-head {
+  position: relative;
+  z-index: 5;
+  background: var(--card);
+}
+.boxscore tbody .bx-name {
+  font-weight: 500;
+}
+.bx-player {
+  margin-right: 5px;
+}
+.boxscore tbody tr.bx-benchstart th,
+.boxscore tbody tr.bx-benchstart td {
+  border-top: 1px solid var(--border);
+}
+.boxscore tfoot th,
+.boxscore tfoot td {
+  border-top: 2px solid var(--border);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* ── Team stats comparison ──────────────────────────────────────────── */
+.team-stats {
+  margin-top: 14px;
+}
+.ts-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  padding-bottom: 4px;
+}
+.ts-head span:first-child {
+  text-align: left;
+}
+.ts-head span:last-child {
+  text-align: right;
+}
+.ts-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.ts-val {
+  color: var(--text-dim);
+}
+.ts-val:first-child {
+  text-align: left;
+}
+.ts-val:last-child {
+  text-align: right;
+}
+.ts-val.better {
+  color: var(--text);
+  font-weight: 700;
+}
+.ts-label {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* ── Injuries ───────────────────────────────────────────────────────── */
+.injuries {
+  margin-top: 14px;
+}
+.inj-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.inj-side {
+  background: var(--bg-soft);
+  border-radius: 2px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.inj-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.inj-player {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+.inj-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inj-status {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.inj-status.s-out {
+  color: var(--loss);
+}
+.inj-status.s-questionable,
+.inj-status.s-day-to-day {
+  color: var(--gold);
+}
+
+/* ── Win probability ────────────────────────────────────────────────── */
+.winprob {
+  margin-top: 14px;
+}
+.wp-caption {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.wp-chart {
+  width: 100%;
+  height: 56px;
+  display: block;
+  margin-top: 4px;
+  background: var(--bg-soft);
+  border-radius: 2px;
+}
+.wp-area {
+  fill: var(--accent-soft);
+  stroke: none;
+}
+.wp-mid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
+}
+.wp-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.wp-note {
+  font-size: 11.5px;
+  margin: 4px 0 0;
+}
+
+/* ── Player pop-out ─────────────────────────────────────────────────── */
+.pm-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pm-shot {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-soft);
+  flex: 0 0 auto;
+}
+
+.pm-shot.pm-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.pm-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pm-name {
+  font-size: 18px;
+}
+
+.pm-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  /* A traded player names both clubs, which can outrun a narrow pop-out. */
+  flex-wrap: wrap;
+}
+
+.pm-arrow {
+  color: var(--text-faint);
+  font-style: normal;
+}
+
+.pm-bio {
+  font-size: 12px;
+}
+
+.pm-origin {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.pm-flag {
+  width: 20px;
+  height: 14px;
+  border-radius: 2px;
+  object-fit: cover;
+}
+
+.pm-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.pm-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  background: var(--bg-soft);
+  border-radius: 2px;
+  padding: 8px 4px;
+}
+
+.pm-stat-v {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-stat-l {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.pm-splits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-log {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pm-log th,
+.pm-log td {
+  padding: 5px 8px;
+  text-align: right;
+}
+
+.pm-log thead th {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+}
+
+.pm-log .pm-date,
+.pm-log .pm-opp {
+  text-align: left;
+}
+
+.pm-res {
+  margin-left: 6px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.pm-res.r-w {
+  color: var(--win);
+}
+
+.pm-res.r-l {
+  color: var(--loss);
+}
+
+@media (max-width: 460px) {
+  .pm-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 460px) {
+  .inj-sides {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gl-team {
+  background: var(--bg-soft);
+  border-radius: 2px;
+  padding: 8px 10px;
+}
+
+.gl-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding-bottom: 5px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A wrapping flex row, not a grid: the name is never truncated, and if a name and its
+   value ever cannot share a line, the value drops beneath it, still right-aligned. */
+.gl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  align-items: baseline;
+  font-size: 12.5px;
+  padding: 2px 0;
+}
+
+.gl-cat {
+  flex: 0 0 30px;
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
+.gl-who {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.gl-v {
+  margin-left: auto;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-sub {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  margin: 18px 0 8px;
+}
+
+.tale {
+  display: grid;
+  gap: 2px;
+}
+
+.tale-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: 2px;
+  background: var(--bg-soft);
+  font-size: 13px;
+}
+
+.tale-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.tale-row .tale-val:first-child {
+  text-align: right;
+}
+
+/* The stronger side of each comparison, so the row is scannable. */
+.tale-val.better {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.tale-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  min-width: 116px;
+}
+
+.md-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 560px) {
+  .tale-label {
+    min-width: 84px;
+  }
+
+  .modal {
+    padding: 16px 14px 18px;
+  }
+
+  /* Two rosters side by side leave each half too narrow to hold a full player
+     name plus the PTS·REB·AST line, so stack them full-width on a phone. */
+  .lu-sides {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Team panel ─────────────────────────────────────────────────────── */
+.tp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tp-head > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.tp-name {
+  font-size: 19px;
+}
+
+.tp-sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.tp-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.tp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 4px;
+  background: var(--bg-soft);
+  border-radius: 2px;
+}
+
+.tp-stat-v {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tp-stat-l {
+  font-size: 10px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tp-form {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tp-chip {
+  width: 25px;
+  height: 25px;
+  border-radius: 2px;
+  border: 0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #fff;
+}
+
+.tp-chip.w {
+  background: var(--win);
+}
+.tp-chip.l {
+  background: var(--loss);
+}
+.tp-chip:hover {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tp-roster {
+  display: grid;
+  gap: 2px;
+}
+
+.tp-player {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  background: var(--bg-soft);
+  border-radius: 2px;
+  font-size: 13px;
+}
+
+.tp-p-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tp-p-line {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tp-p-line i {
+  font-style: normal;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+@media (max-width: 560px) {
+  .tp-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ── Toasts ─────────────────────────────────────────────────────────── */
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(320px, calc(100vw - 32px));
+}
+
+.toast {
+  display: flex;
+  align-items: stretch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast-final {
+  border-left-color: var(--win);
+}
+.toast-nailbiter {
+  border-left-color: var(--live);
+}
+.toast-lead-change {
+  border-left-color: var(--viz-pos);
+}
+
+.toast-body {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 4px 9px 11px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toast-icon {
+  font-size: 16px;
+}
+
+.toast-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.toast-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.toast-teams {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-x {
+  background: none;
+  border: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.toast-x:hover {
+  color: var(--text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (max-width: 560px) {
+  .toasts {
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+.foot {
+  margin-top: 36px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.foot-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.foot a {
+  color: var(--accent);
+}
+
+.disclaimer,
+.credit {
+  margin: 0;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (min-width: 860px) {
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .hide-sm {
+    display: none;
+  }
+
+  /* Give the diverging bars the full row on a phone; scored/allowed is detail that
+     the standings table already carries. */
+  .margin-row {
+    grid-template-columns: 92px 1fr;
+  }
+
+  .margin-split {
+    display: none;
+  }
+
+  /* The track is much narrower now, so shrink the arms to keep the longest bar's
+     value label (e.g. Lynx "+8.6") from colliding with or overrunning the bar. */
+  .margin {
+    --arm-scale: 0.68;
+  }
+
+  .tiles {
+    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  }
+
+  .bx-field {
+    columns: 1;
+  }
+
+  .game {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .game-when {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .game-meta {
+    grid-column: 1;
+  }
+
+  .side-loc {
+    display: none;
+  }
+
+  /* Stack the two teams so each nickname gets the full card width instead of half —
+     beside the star, logo, and score, half a phone leaves "Mystics" as "M…". Both rows
+     read the same way: star · logo · name … score. */
+  .game-teams {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .at {
+    display: none;
+  }
+
+  .side:last-child {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .side:last-child .star {
+    order: -1;
+  }
+
+  .side:last-child .side-score {
+    margin-inline: auto 0;
+  }
+
+  .brand h1 {
+    font-size: 21px;
+  }
+}
+
+/* ── History ────────────────────────────────────────────────────────── */
+/* Archived seasons. The bracket, stats cards and tables are the live components, so
+   this only styles what's new: the mode switch, the season picker, and the tables. */
+.view-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hy-pick {
+  margin-bottom: 12px;
+}
+
+.hy-note {
+  margin-bottom: 12px;
+  max-width: none;
+}
+
+.hy-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hy-team:hover {
+  color: var(--accent);
+}
+
+.hy-year {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hy-table td,
+.hy-table th {
+  font-size: 13px;
+}
+
+/* ---------- Box score on a phone ----------
+   Thirteen columns across twelve rows is a lot of thumb. The four that answer "who
+   played well" are shown by default, which fits with no sideways scroll at all, and
+   "More stats" brings the rest back for anyone who wants the splits. Ported from the
+   FIBA viewer on 2026-09-06. */
+@media (max-width: 560px) {
+  .bx-more {
+    display: inline-block;
+  }
+  .boxscore:not(.bx-all) .bx-extra {
+    display: none;
+  }
+  /* Nothing to scroll in compact mode, so the wrapper stops being a scroll
+     container and the sticky header can resolve against the modal instead. */
+  .bx-scroll:has(.boxscore:not(.bx-all)) {
+    overflow: visible;
+  }
+}
+
+/* ── Scenarios ──────────────────────────────────────────────────────── */
+.sc-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sc-games {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.sc-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-game:last-child {
+  border-bottom: 0;
+}
+
+.sc-when {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-live {
+  color: var(--live);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sc-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sc-at {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.sc-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 78px;
+  min-height: 36px;
+  padding: 4px 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sc-team:hover {
+  border-color: var(--accent);
+}
+
+.sc-team.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sc-team.lost {
+  opacity: 0.45;
+}
+
+.sc-matrix td,
+.sc-matrix th {
+  padding: 4px 3px;
+}
+
+.sc-matrix .sc-cell-td {
+  text-align: center;
+}
+
+.sc-cell {
+  width: 100%;
+  min-width: 36px;
+  min-height: 30px;
+  padding: 0 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  /* Shade by share of outcomes: a faint wash for a longshot, solid for a lock. */
+  background: color-mix(in srgb, var(--court) calc(var(--share) * 70% + 8%), transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.sc-cell.out {
+  background: color-mix(in srgb, var(--out) calc(var(--share) * 55% + 8%), transparent);
+}
+
+.sc-cell:disabled {
+  background: none;
+  cursor: default;
+}
+
+.sc-cell.locked {
+  font-weight: 700;
+}
+
+.sc-cell.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.sc-path {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.sc-path-lead {
+  margin: 12px 0 6px;
+}
+
+.sc-path .sc-path-lead {
+  margin-top: 0;
+}
+
+.sc-path-sub {
+  margin: 6px 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.sc-margin {
+  color: var(--gold);
+}
+
+.sc-needs,
+.sc-ties,
+.sc-matchups {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.sc-needs li,
+.sc-matchups li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.sc-ties li {
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.sc-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0 8px;
+}
+
+.sc-final {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.sc-final li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sc-final li:nth-child(8) {
+  border-bottom: 2px dashed var(--accent);
+}
+
+.sc-final .num {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-final-out {
+  opacity: 0.55;
+}
+
+/* On a phone the grid must fit without scrolling sideways: drop the team logos and
+   narrow the cells so all nine seed columns sit beside the abbreviation. */
+@media (max-width: 460px) {
+  .sc-matrix {
+    table-layout: fixed;
+  }
+  .sc-matrix .col-team {
+    width: 44px;
+  }
+  .sc-matrix .col-team .logo {
+    display: none;
+  }
+  .sc-matrix td,
+  .sc-matrix th {
+    padding: 3px 1px;
+  }
+  .sc-cell {
+    min-width: 0;
+    font-size: 10px;
+  }
+  .sc-when {
+    flex-basis: 100%;
+  }
+}
+
+.sc-matrix th.num {
+  text-align: center;
+}
+
+.sc-cell sup {
+  color: var(--gold);
+  font-weight: 700;
+  margin-left: 1px;
+}
+
+/* The playoff line runs down the grid too: seeds 1-8 on the left, Out on the right. */
+.sc-matrix .sc-out-col {
+  border-left: 2px dashed var(--accent);
+}
+
+/* Eliminated is a loss, so its lock reads in the loss color, not as a checkmark. */
+.sc-cell.out.locked {
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--loss);
+  font-size: 14px;
+}
+
+.sc-matrix .badge {
+  margin-left: 2px;
+}
+
+/* The exact result combinations behind a tapped cell: one tappable line each. */
+.sc-combos {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+
+.sc-combo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 3px 0;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sc-combo:hover {
+  border-color: var(--accent);
+}
+
+.sc-combo-count {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The tapped cell's breakdown, opened inline under its team's row. */
+.sc-matrix .sc-detail-row td {
+  padding: 8px 6px 10px;
+  white-space: normal;
+  background: var(--bg-soft);
+  border-bottom: 2px solid var(--accent);
+}
+
+.sc-detail-row .sc-path {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Phone leaders: the name wraps and the bar gives up its minimum, or a long name pushes
+   the value column off the screen and the whole page scrolls sideways (November 2, 2026). */
+@media (max-width: 460px) {
+  .lead-name {
+    white-space: normal;
+  }
+  .lead-bar {
+    width: 30%;
+    min-width: 28px;
+  }
+}
+@media (max-width: 460px) {
+  /* A button centers its text, which shows once a long name takes two lines. */
+  .lead-player {
+    text-align: left;
+  }
+}
+
+/* Team panel roster: minmax(0, ...) lets a row stay inside the panel on a small phone. */
+.tp-roster {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 360px) {
+  .tp-player {
+    flex-wrap: wrap;
+  }
+}
+
+/* The Stats page puts this chart in a half-width column on a small laptop, so the track is
+   as narrow as a phone's and needs the same arm scale (November 2, 2026). */
+@media (max-width: 1280px) {
+  .margin {
+    --arm-scale: 0.68;
+  }
+}
+
+/* A channel not announced yet: dashed and unbolded, the hub's treatment, so it reads as a
+   placeholder and not as a network called "Channel TBA". */
+.net-tba {
+  padding: 0 5px;
+  border: 1px dashed var(--border);
+  border-radius: 2px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ── Unrivaled additions ───────────────────────────────────────────── */
+.tb-mark {
+  margin-left: 4px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.bx-single {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  align-items: center;
+}
+.bx-open {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bx-open:hover {
+  color: var(--accent);
+}
+.hy-season {
+  margin: 24px 0 8px;
+}
+.boxscore th[scope='row'] {
+  text-align: left;
+  white-space: nowrap;
+}

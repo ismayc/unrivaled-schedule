@@ -1,0 +1,36 @@
+{
+  "name": "the-unrivaled-schedule",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "An unofficial, timezone-aware viewer for the Unrivaled 3-on-3 league: schedule, standings, playoff bracket, stats, and every past season.",
+  "author": "Chester Ismay",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:data": "LIVE_DATA=1 vitest run",
+    "coverage:badge": "vitest run --coverage && node scripts/coverage-badge.mjs",
+    "fetch:schedule": "node scripts/fetch-schedule.mjs",
+    "check:schedule": "node scripts/check-schedule.mjs",
+    "fetch:full": "node scripts/fetch-schedule.mjs --full"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.3",
+    "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.12",
+    "jsdom": "^30.0.1",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.12"
+  }
+}

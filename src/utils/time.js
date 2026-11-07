@@ -1,0 +1,192 @@
+import { LEAGUE } from '../config/league.js'
+// Timezone + formatting core.
+//
+// Every game's `tip` is an absolute instant (UTC ISO string), so rendering into any
+// IANA zone is a pure formatting concern — no date math, no DST edge cases.
+
+export const detectTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
+  } catch {
+    return 'America/New_York'
+  }
+}
+
+// The zones worth one tap. The league tours US arenas; the rest cover the international
+// audience that follows these players through the year.
+export const TIMEZONES = [
+  { id: 'America/New_York', label: 'Eastern' },
+  { id: 'America/Chicago', label: 'Central' },
+  { id: 'America/Denver', label: 'Mountain' },
+  { id: 'America/Phoenix', label: 'Arizona' },
+  { id: 'America/Los_Angeles', label: 'Pacific' },
+  { id: 'America/Toronto', label: 'Toronto' },
+  { id: 'Europe/London', label: 'London' },
+  { id: 'Europe/Paris', label: 'Central Europe' },
+  { id: 'Australia/Sydney', label: 'Sydney' },
+  { id: 'UTC', label: 'UTC' },
+]
+
+export function timezoneOptions(current) {
+  const known = TIMEZONES.some((t) => t.id === current)
+  return known ? TIMEZONES : [{ id: current, label: current.split('/').pop().replace(/_/g, ' ') }, ...TIMEZONES]
+}
+
+const fmt = (tz, opts) => new Intl.DateTimeFormat(LEAGUE.locale, { timeZone: tz, ...opts })
+
+export function formatTime(iso, tz) {
+  return fmt(tz, { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
+}
+
+export function formatDate(iso, tz, opts = {}) {
+  return fmt(tz, { weekday: 'short', month: 'short', day: 'numeric', ...opts }).format(new Date(iso))
+}
+
+// "Sep 28, 4:49 PM" in the viewer's zone, for the footer's "Data as of". A missing or
+// unparseable stamp gives null, never "Invalid Date" and never the epoch: `new Date(null)`
+// is a real date (December 31, 1969 in the US), which a TBC tip once printed.
+export function formatStamp(iso, tz) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return fmt(tz, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d)
+}
+
+export function formatZoneAbbr(iso, tz) {
+  const parts = fmt(tz, { timeZoneName: 'short' }).formatToParts(new Date(iso))
+  return parts.find((p) => p.type === 'timeZoneName').value
+}
+
+// Stable YYYY-MM-DD key for the calendar day a game falls on *in the viewer's zone*.
+// A 10pm Pacific tip is "today" out west and "tomorrow" on the east coast, and the
+// schedule must group by what the viewer actually sees.
+export function dayKey(iso, tz) {
+  const p = fmt(tz, { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(iso))
+  const get = (t) => p.find((x) => x.type === t).value
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
+export const todayKey = (tz, now = new Date()) => dayKey(now.toISOString(), tz)
+
+// ── A TIP TIME THE LEAGUE HAS NOT ANNOUNCED ─────────────────────────────────────────
+// `timeTbd` (set in scripts/fetch-schedule.mjs when a game page says "tip time to be
+// set") marks a game whose `tip` is a PLACEHOLDER: noon Arizona time on the game's day,
+// which is a date wearing the costume of an instant. Read as a real tip it would print a
+// time nobody announced, count down to it, and call the game in progress at lunchtime.
+//
+// So: bucket these on their Eastern day (noon Arizona is the same date there and in
+// every US zone), never format the clock, and never let the placeholder answer a
+// question about whether the game has started.
+export const PLACEHOLDER_DAY_TZ = 'America/New_York'
+
+export const timeTbd = (game) => game?.timeTbd === true
+
+// The day a game belongs to: the viewer's own zone for a real tip, the Eastern date for
+// a placeholder (which is the only thing it actually encodes).
+export const gameDayKey = (game, tz) => dayKey(game.tip, timeTbd(game) ? PLACEHOLDER_DAY_TZ : tz)
+
+// The clock a game shows, or that there isn't one yet.
+export const gameTime = (game, tz) => (timeTbd(game) ? 'Time TBD' : formatTime(game.tip, tz))
+
+// A countdown to a time nobody has set is not a countdown.
+export const gameCountdown = (game, now = Date.now()) =>
+  timeTbd(game) ? null : countdown(game.tip, now)
+
+export function dayLabel(key, tz, now = new Date()) {
+  const today = todayKey(tz, now)
+  if (key === today) return 'Today'
+  const d = new Date(`${key}T12:00:00Z`)
+  const shift = (n) => {
+    const x = new Date(d)
+    x.setUTCDate(x.getUTCDate() + n)
+    return dayKey(x.toISOString(), 'UTC')
+  }
+  if (shift(-1) === today) return 'Tomorrow'
+  if (shift(1) === today) return 'Yesterday'
+  return new Intl.DateTimeFormat(LEAGUE.locale, {
+    timeZone: 'UTC',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(d)
+}
+
+// A game runs about 90 minutes with breaks; for that long after tip a game with no
+// score yet counts as possibly in progress.
+const GAME_MS = LEAGUE.gameLengthMs
+
+export function liveState(game, now = Date.now()) {
+  if (game.postponed || game.canceled) return 'void'
+  if (game.live) return 'live'
+  if (game.score) return 'final'
+  // No announced time: the placeholder would call the game live in the small hours and
+  // over by breakfast. A score or a live feed can still prove it has been played — both
+  // are checked above — so until one of them lands, all that is known is "upcoming".
+  if (timeTbd(game)) return 'upcoming'
+  const start = new Date(game.tip).getTime()
+  if (now < start) return 'upcoming'
+  return now < start + GAME_MS ? 'likely-live' : 'past'
+}
+
+// Which bucket the "When" quick-filter puts a game in. A game that has tipped but has
+// no feed yet still reads as live, since that's what the viewer sees on the card. 'void'
+// is its own bucket so a postponed game never masquerades as a finished one.
+export function whenBucket(game, now = Date.now()) {
+  const state = liveState(game, now)
+  if (state === 'live' || state === 'likely-live') return 'live'
+  if (state === 'upcoming') return 'upcoming'
+  if (state === 'void') return 'void'
+  return 'final'
+}
+
+// Is this the next unplayed game for either of its two teams? The injury report is a
+// snapshot of CURRENT league injuries, so it only makes sense for a team's next matchup —
+// not a finished game (whose "injuries" would be today's, not that day's) and not one
+// several games out (the report will have changed by then). Pure: keyed on which games are
+// played (have a score / are void) and tip order, not on the wall clock.
+export function isUpNext(game, games) {
+  if (!game || game.score || game.postponed || game.canceled) return false
+  const start = new Date(game.tip).getTime()
+  const isTeamsNext = (team) => {
+    let earliest = Infinity
+    for (const g of games) {
+      if (g.score || g.postponed || g.canceled) continue
+      if (g.home !== team && g.away !== team) continue
+      earliest = Math.min(earliest, new Date(g.tip).getTime())
+    }
+    return start === earliest
+  }
+  return isTeamsNext(game.away) || isTeamsNext(game.home)
+}
+
+export function countdown(iso, now = Date.now()) {
+  const ms = new Date(iso).getTime() - now
+  if (ms <= 0) return null
+  const mins = Math.floor(ms / 60000)
+  const d = Math.floor(mins / 1440)
+  const h = Math.floor((mins % 1440) / 60)
+  const m = mins % 60
+  if (d) return `${d}d ${h}h`
+  if (h) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+// How long before a scheduled tip a game counts as imminent, which the card marks
+// "Pre-game".
+export const IMMINENT_MS = 15 * 60 * 1000
+
+// A game we should be actively watching for tip-off: not yet live, final, or void,
+// and inside the window running from IMMINENT_MS before the scheduled tip until the
+// ~game-length fallback expires.
+export function isImminent(game, now = Date.now()) {
+  if (game.postponed || game.canceled || game.live || game.score) return false
+  // Nothing to be imminent about: the window would open 15 minutes before a midnight
+  // that is not the tip, and close long before the game is actually played.
+  if (timeTbd(game)) return false
+  const start = new Date(game.tip).getTime()
+  return now >= start - IMMINENT_MS && now < start + GAME_MS
+}
+
+// True when any game is imminent — the cue to poll at the live cadence even before
+// anything has actually tipped, so the flip to live lands within one live refresh.
+export const anyImminent = (games, now = Date.now()) => games.some((g) => isImminent(g, now))

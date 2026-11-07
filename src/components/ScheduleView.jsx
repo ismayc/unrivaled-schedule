@@ -1,0 +1,298 @@
+import { useMemo, useRef, useEffect, useState } from 'react'
+import { dayLabel, gameDayKey, todayKey } from '../utils/time.js'
+import GameCard from './GameCard.jsx'
+import { LEAGUE } from '../config/league.js'
+
+// How many days back the default ("recent") view reaches — a week of results, so
+// yesterday's finals are always one glance away without loading the whole season.
+export const RECENT_LOOKBACK_DAYS = 7
+
+// How many upcoming game-DAYS the default view shows before collapsing the rest
+// behind the "Later games" toggle. Counted in game-days (not calendar days) so a
+// pre-season landing still shows the fortnight around opening day rather than an
+// empty window. Without this cap a fresh rollover renders the entire season on
+// load — brutal on a phone (it timed out CI's app tests on the NBA sibling).
+export const RECENT_LOOKAHEAD_DAYS = 14
+
+// Labels derived from the 'YYYY-MM' key itself (UTC so the month never shifts).
+const monthLabel = (mk) =>
+  new Date(`${mk}-01T12:00:00.000Z`).toLocaleDateString(LEAGUE.locale, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+const monthShort = (mk) =>
+  new Date(`${mk}-01T12:00:00.000Z`).toLocaleDateString(LEAGUE.locale, { month: 'short', timeZone: 'UTC' })
+
+
+export default function ScheduleView({ games, tz, hideScores, showPast = false, onOpen }) {
+  const today = todayKey(tz)
+  const thisMonth = today.slice(0, 7)
+
+  // The oldest day the default view shows: today minus a week, as a YYYY-MM-DD key.
+  const cutoff = useMemo(() => {
+    const [y, m, d] = today.split('-').map(Number)
+    return new Date(Date.UTC(y, m - 1, d - RECENT_LOOKBACK_DAYS)).toISOString().slice(0, 10)
+  }, [today])
+
+  // Bucket by the calendar day the viewer sees, not by UTC date.
+  const allDays = useMemo(() => {
+    const map = new Map()
+    const add = (key, item) => {
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(item)
+    }
+    for (const g of games) add(gameDayKey(g, tz), g)
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }, [games, tz])
+
+  // The "Later games" collapse is deliberately component-local, like search and the
+  // phase chips: it is never written to the URL or localStorage, so it can't add a
+  // persisted readState key (which would break the family's deep-equal link tests).
+  const [showLater, setShowLater] = useState(false)
+
+  // Default = the last week of results through the next fortnight of game-days, with
+  // the rest of the upcoming season behind "Later games"; Full season shows
+  // everything, grouped into collapsible months.
+  const { days, laterCount } = useMemo(() => {
+    if (showPast) return { days: allDays, laterCount: 0 }
+    const recent = allDays.filter(([key]) => key >= cutoff)
+    // Off-season: with the whole season in the past there's nothing in the last week and
+    // nothing upcoming, so the recent window is empty. Fall back to the last ~week of
+    // actual game-days rather than render a blank schedule on a finished season.
+    if (!recent.length) return { days: allDays.slice(-RECENT_LOOKBACK_DAYS), laterCount: 0 }
+    const upcoming = recent.filter(([key]) => key >= today)
+    const hidden = showLater ? [] : upcoming.slice(RECENT_LOOKAHEAD_DAYS)
+    const shown = hidden.length ? recent.slice(0, recent.length - hidden.length) : recent
+    return { days: shown, laterCount: hidden.reduce((n, [, gs]) => n + gs.length, 0) }
+  }, [allDays, showPast, showLater, cutoff, today])
+
+  // The results/upcoming boundary the view lands on: the most recent past day shown
+  // (yesterday, usually) with today right below it. Falls back to today.
+  const anchorRef = useRef(null)
+  const anchorKey = useMemo(() => {
+    const past = days.filter(([key]) => key < today)
+    return past.length ? past[past.length - 1][0] : today
+  }, [days, today])
+
+  // Full-season grouping: [ [monthKey, [ [dayKey, games], ... ] ], ... ].
+  const months = useMemo(() => {
+    const map = new Map()
+    for (const entry of allDays) {
+      const mk = entry[0].slice(0, 7)
+      if (!map.has(mk)) map.set(mk, [])
+      map.get(mk).push(entry)
+    }
+    return [...map.entries()]
+  }, [allDays])
+
+  // Where a "Today" jump lands: today if it has games, else the NEXT game-day, else (the
+  // whole season already past) the most recent game-day.
+  const nowKey = useMemo(() => {
+    const upcoming = allDays.find(([key]) => key >= today)
+    return (upcoming || allDays[allDays.length - 1])?.[0] ?? null
+  }, [allDays, today])
+  const nowMonth = nowKey ? nowKey.slice(0, 7) : thisMonth
+
+  // The month holding that landing day is the one open to start; the rest collapse the
+  // season to a few rows.
+  const [expanded, setExpanded] = useState(() => new Set([nowMonth]))
+  // Per-day folding and per-day spoiler overrides. Deliberately component-local: a day
+  // you folded is a reading position, not a preference worth carrying in the URL — and
+  // a new readState key would break the deep-equal URL tests across every sibling fork.
+  const [foldedDays, setFoldedDays] = useState(() => new Set())
+  const [dayOverrides, setDayOverrides] = useState({})
+  const monthRefs = useRef({})
+  const monthJumpRef = useRef(null)
+  const dayRefs = useRef({})
+  const [pendingScroll, setPendingScroll] = useState(null)
+
+  const toggleMonth = (mk) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(mk)) next.delete(mk)
+      else next.add(mk)
+      return next
+    })
+  const toggleDay = (key) =>
+    setFoldedDays((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  // An override is sticky per day and wins over the global spoiler toggle, so you can
+  // reveal yesterday's result without giving up spoiler-free mode for everything else.
+  const scoresHidden = (key) => (key in dayOverrides ? dayOverrides[key] : hideScores)
+  const toggleReveal = (key) =>
+    setDayOverrides((prev) => ({ ...prev, [key]: !scoresHidden(key) }))
+
+  const jumpToMonth = (mk) => {
+    setExpanded((prev) => new Set(prev).add(mk))
+    setPendingScroll(mk)
+  }
+  // "Today" jump: open the month holding the landing day and scroll to that day itself
+  // (today, or the next game-day when today is idle) — never just the month header.
+  const jumpToToday = () => {
+    setExpanded((prev) => new Set(prev).add(nowMonth))
+    setPendingScroll(nowKey)
+  }
+  // "Top" jump: back to the very top of the page — where the settings toolbar lives, which
+  // the landing scroll otherwise leaves above the fold.
+  const jumpToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+
+  // Landing scroll: recent view sits at the yesterday/today boundary; full-season lands on
+  // the "now" day (today / next game-day), which its open month renders.
+  useEffect(() => {
+    const target = showPast ? dayRefs.current[nowKey] : anchorRef.current
+    target?.scrollIntoView({ block: 'start' })
+  }, [showPast, anchorKey, nowKey])
+
+  // Jump-bar scroll: after a chip or "Today" expands its target, scroll it into view — a day
+  // key resolves via dayRefs, a month key via monthRefs. Clearing pendingScroll re-runs
+  // this, but the guard makes the second pass a no-op.
+  useEffect(() => {
+    if (pendingScroll == null) return
+    const el = dayRefs.current[pendingScroll] || monthRefs.current[pendingScroll]
+    el?.scrollIntoView({ block: 'start' })
+    setPendingScroll(null)
+  }, [pendingScroll])
+
+  // Publish the sticky month jump-bar's height as --month-jump-h so a day/month scrolled
+  // to `block: 'start'` clears BOTH sticky bars (filter bar + this one) instead of landing
+  // behind them. 0 in recent mode, where the bar isn't rendered. Re-measured when the mode
+  // or month set changes and on resize (the chips wrap on narrow screens).
+  useEffect(() => {
+    const publish = () =>
+      document.documentElement.style.setProperty(
+        '--month-jump-h',
+        `${monthJumpRef.current?.offsetHeight ?? 0}px`,
+      )
+    publish()
+    window.addEventListener('resize', publish)
+    return () => window.removeEventListener('resize', publish)
+  }, [showPast, months.length])
+
+  const renderDay = ([key, dayGames]) => {
+    const folded = foldedDays.has(key)
+    const hidden = scoresHidden(key)
+    return (
+    <div
+      className={`day ${key === today ? 'is-today' : ''}`}
+      key={key}
+      id={`day-${key}`}
+      ref={(el) => {
+        dayRefs.current[key] = el
+        if (key === anchorKey) anchorRef.current = el
+      }}
+    >
+      <h3 className="day-head">
+        <button
+          className="day-fold"
+          onClick={() => toggleDay(key)}
+          aria-expanded={!folded}
+          aria-label={`${folded ? 'Show' : 'Hide'} games on ${dayLabel(key, tz)}`}
+        >
+          <span className="day-caret" aria-hidden="true">
+            {folded ? '▸' : '▾'}
+          </span>
+          <span className="day-name">{dayLabel(key, tz)}</span>
+        </button>
+        <span className="day-count">{dayGames.length} game{dayGames.length === 1 ? '' : 's'}</span>
+        <button
+          className="day-eye"
+          onClick={() => toggleReveal(key)}
+          aria-pressed={hidden}
+          title={hidden ? 'Show scores for this day' : 'Hide scores for this day'}
+        >
+          {hidden ? '🙈' : '👁'}
+        </button>
+      </h3>
+      {!folded && (
+        <div className="day-games">
+          {dayGames.map((g) => (
+            <GameCard key={g.id} game={g} tz={tz} hideScores={hidden} onOpen={onOpen} />
+          ))}
+        </div>
+      )}
+    </div>
+    )
+  }
+
+  if (!days.length) {
+    return (
+      <section className="view">
+        <p className="empty">No games match those filters.</p>
+      </section>
+    )
+  }
+
+  // Recent (default): a short flat list, no need for month machinery. The rest of
+  // the upcoming season sits behind a toggle mirroring the "Earlier games" chip.
+  if (!showPast) {
+    return (
+      <section className="view schedule">
+        {days.map(renderDay)}
+        {laterCount > 0 && (
+          <button
+            className="chip later-toggle"
+            onClick={() => setShowLater(true)}
+            title="Show the rest of the upcoming season"
+          >
+            <span aria-hidden="true">▸</span> Later games
+            <span className="chip-count">{laterCount}</span>
+          </button>
+        )}
+        {showLater && (
+          <button
+            className="chip later-toggle"
+            onClick={() => setShowLater(false)}
+            title="Collapse back to the next two weeks"
+          >
+            <span aria-hidden="true">▾</span> Later games
+          </button>
+        )}
+      </section>
+    )
+  }
+
+  // Full season: a sticky month jump-bar over collapsible month sections.
+  return (
+    <section className="view schedule">
+      <nav className="month-jump" aria-label="Jump to month" ref={monthJumpRef}>
+        {months.map(([mk]) => (
+          <button
+            key={mk}
+            className={`month-chip ${mk === thisMonth ? 'is-current' : ''}`}
+            onClick={() => jumpToMonth(mk)}
+          >
+            {monthShort(mk)}
+          </button>
+        ))}
+        <button className="month-chip month-top" onClick={jumpToTop}>
+          ↑ Top
+        </button>
+        <button className="month-chip month-today" onClick={jumpToToday}>
+          Today
+        </button>
+      </nav>
+      {months.map(([mk, monthDays]) => {
+        const open = expanded.has(mk)
+        const count = monthDays.reduce((n, [, gs]) => n + gs.length, 0)
+        return (
+          <div className="month" key={mk} ref={(el) => (monthRefs.current[mk] = el)}>
+            <button
+              className={`month-head ${open ? 'open' : ''}`}
+              onClick={() => toggleMonth(mk)}
+              aria-expanded={open}
+            >
+              <span aria-hidden="true">{open ? '▾' : '▸'}</span> <span>{monthLabel(mk)}</span>
+              <span className="month-count">{count} game{count === 1 ? '' : 's'}</span>
+            </button>
+            {open && <div className="month-days">{monthDays.map(renderDay)}</div>}
+          </div>
+        )
+      })}
+    </section>
+  )
+}

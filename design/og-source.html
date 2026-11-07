@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- Source of public/og-image.png (1200x630). Re-render with:
+       python3 -I ~/.claude/skills/web-page-meta/render_meta.py --dir design --bg "#14121a"
+       cp design/og.png public/og-image.png
+     (and see README "Icons" for the icon files). -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { background: #14121a; color: #f0f1f3; font-family: 'Archivo', system-ui, sans-serif;
+         display: flex; align-items: center; gap: 64px; padding: 0 90px; box-sizing: border-box; }
+  img { width: 300px; height: 300px; flex: none; }
+  h1 { font-size: 78px; line-height: 1.02; margin: 0 0 22px; font-weight: 800; font-stretch: 112%; }
+  h1 span { color: #c4ec3a; }
+  p { font-size: 30px; margin: 0; color: #a7adb8; line-height: 1.35; }
+  .bar { width: 120px; height: 8px; background: #c4ec3a; margin-bottom: 28px; }
+</style>
+</head>
+<body>
+  <img src="favicon.svg" alt="">
+  <div>
+    <div class="bar"></div>
+    <h1>The <span>Unrivaled</span><br>Schedule</h1>
+    <p>Every game in your timezone, with standings, the playoff bracket, box scores, and every season since 2025.</p>
+  </div>
+</body>
+</html>

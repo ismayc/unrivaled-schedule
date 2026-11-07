@@ -1,0 +1,333 @@
+name: Refresh data
+
+# The app ships a committed snapshot of the season, so it renders instantly with no
+# requests — but that snapshot goes stale the moment a game finishes. This keeps it
+# current: twice daily it re-fetches, and on any change it tests, commits to main, and
+# redeploys the site — all in this one job. The test run is the gate, so a bad refresh
+# fails here instead of shipping.
+#
+# Unrivaled is not on ESPN and publishes no feed, and its site sends no CORS headers, so
+# the browser cannot fetch scores: this workflow is the only way a result reaches the
+# page. scripts/fetch-schedule.mjs reads the league's own pages one at a time with a
+# pause between requests, and never refetches a game whose box score is committed.
+#
+# Two schedules:
+#   * game nights, January through March: every 30 minutes from 00:00 to 06:30 UTC
+#     (5:00 PM to 11:30 PM Arizona, which covers every tip on the 2025 to 2027
+#     schedules). A normal run fetches the three schedule pages plus only the games
+#     within half a day of now, about 10 to 20 requests.
+#   * once a day, all year: `--full`, which refetches every unplayed game so tip times
+#     and channels set weeks ahead land too (about 60 requests).
+#
+# A RED RUN MEANS ONE OF THREE THINGS, and they used to send the same email. Fourteen
+# days of failures across the family (August 23 to September 6, 2026) sorted into:
+#
+#   * the fetch did not land: a 5xx, or a parser check refusing a page it does
+#     not recognize. Nothing was written, the site is fine, and the next run will
+#     try again. In the WNBA sibling (ESPN 5xx, a truncated team list) this was four
+#     of ten reds. This is now a warning on a GREEN job, retried three times first.
+#   * the gate is red: a test asserted a season state the data moved past, or new data
+#     dried up a covered branch. The site is STALE until a human edits a test. Six of
+#     ten reds. This stays red, and files one issue naming the failing tests.
+#   * the push raced a human commit. One of ten. The rebase-retry below absorbs it.
+#
+# The second class is closed by construction as of September 18, 2026. It kept recurring
+# (the playoff race on August 10, the week view on September 5, the leaders trade arrow
+# on September 18) because the gate here was the 100% COVERAGE gate, and coverage moved
+# with the data. The main suite now reads frozen data whoever the importer is (the
+# frozenData plugin in vite.config.js), so a refresh cannot move coverage at all, and the
+# gate here is the LIVE suite instead: `npm run test:data`, invariants and a smoke render
+# of every view against the refreshed modules, no coverage threshold. A red gate now
+# means the DATA is wrong or breaks a view, which is the only thing a refresh can break.
+#
+# The one thing that must never be silent is "nothing has landed for days", whatever
+# the cause, so a fetch that keeps failing turns into an issue after 72 hours.
+
+on:
+  schedule:
+    - cron: '*/30 0-6 * 1-3 *' # game nights, January through March
+    - cron: '15 15 * * *' # daily full sweep of unplayed games
+  workflow_dispatch:
+
+permissions:
+  contents: write # commit the refreshed data to main
+  pages: write # deploy the rebuilt site
+  id-token: write # OIDC for actions/deploy-pages
+  issues: write # file and close the two signal issues below
+
+# The fetch/test phase needs no repo-wide lock — only the Pages deploy must serialize
+# with CI's, and that lives as a job-level `pages` group on both deploy jobs. A static
+# workflow-level `pages` group here used to occupy the shared slot for the whole
+# fetch+gate run and helped cancel main's queued CI on 2026-08-13.
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+env:
+  # After this many hours without a data commit, a failing fetch stops being a
+  # warning and becomes an issue. At least one run a day, so this is three missed days.
+  STALE_AFTER_HOURS: 72
+  GATE_ISSUE: 'Refresh gate is red: the refreshed data failed the live data suite'
+  STALE_ISSUE: 'Refresh has not landed for days'
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+      published: ${{ steps.commit.outcome == 'success' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      # No deps needed to fetch — the script uses Node built-ins only.
+      #
+      # Three attempts at the WHOLE run, five then ten minutes apart. The script already
+      # retries each request with exponential backoff, so this is not about one flaky
+      # URL; it is about a site-wide 5xx, or a page caught mid-deploy, which a parser
+      # check refuses rather than writing a partial season. continue-on-error so a fetch that still fails is explained by the next
+      # step rather than ending the job red.
+      - name: Regenerate schedule, results, box scores, and crests
+        id: fetch
+        continue-on-error: true
+        shell: bash
+        env:
+          # The daily sweep and a hand dispatch refetch every unplayed game.
+          FULL: ${{ github.event.schedule == '15 15 * * *' || github.event_name == 'workflow_dispatch' }}
+        run: |
+          flag=""
+          if [ "$FULL" = "true" ]; then flag="--full"; fi
+          for attempt in 1 2 3; do
+            if node scripts/fetch-schedule.mjs $flag; then
+              echo "fetched on attempt $attempt"
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::fetch attempt $attempt failed, retrying in $((attempt * 5)) minutes"
+              sleep $((attempt * 300))
+            fi
+          done
+          exit 1
+
+      # A fetch that did not land is a warning, not a failure: nothing was written and
+      # the site is exactly as it was. The exception is silence that has gone on too
+      # long. The last data commit's age comes from the API rather than `git log`,
+      # because the checkout is shallow and a depth-1 log cannot see past HEAD.
+      - name: Explain a fetch that did not land
+        if: steps.fetch.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          last=$(gh api "repos/$GH_REPO/commits?path=src/data&per_page=1" --jq '.[0].commit.committer.date')
+          age_h=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
+          echo "::warning::the fetch did not land after 3 attempts; nothing was written. Last data commit: $last (${age_h}h ago)."
+          {
+            echo "### Fetch did not land"
+            echo
+            echo "Nothing was written and the site is unchanged. Last data commit: $last (${age_h}h ago)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$age_h" -lt "$STALE_AFTER_HOURS" ]; then
+            exit 0
+          fi
+          # Past the threshold: one OPEN issue at a time, re-filed only after it is closed.
+          if [ -n "$(gh issue list --state open --search "\"$STALE_ISSUE\"" --json number --jq '.[0].number')" ]; then
+            echo "Stale-data issue already open, not re-filing." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cat > /tmp/issue-body.md <<EOF
+          The refresh has not committed new data since $last (${age_h} hours ago), and the
+          latest run's fetch failed after three attempts. The site is serving that last
+          commit. Nothing wrong has shipped; the data is just old.
+
+          Run: $RUN_URL
+
+          ## What to do
+
+          1. Open the run and read the last attempt's error. A parser refusal (a label,
+             a column, or a club it does not know) means unrivaled.basketball changed
+             its pages, and scripts/lib/unrivaled.mjs needs updating. An HTTP error on
+             every URL means the site is down or blocking Actions' address range.
+          2. Re-run the workflow (workflow_dispatch) once the cause is gone.
+          3. This issue closes itself on the next successful commit.
+
+          Filed by \`.github/workflows/refresh-data.yml\`.
+          EOF
+          gh issue create --title "$STALE_ISSUE" --body-file /tmp/issue-body.md
+
+      - name: Summarize what changed
+        id: diff
+        if: steps.fetch.outcome == 'success'
+        run: |
+          if git diff --quiet -- src/data public/logos; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Data refresh"
+              echo '```'
+              git diff --stat -- src/data public/logos
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # The gate: standings are derived from the committed scores, so a bad refresh fails
+      # a test here rather than shipping a wrong-looking table. This is the LIVE suite
+      # (test/live/, `LIVE_DATA=1`): invariants on the refreshed modules plus a smoke
+      # render of every view, every game dialog, and every team panel against them.
+      #
+      # It used to be the 100% coverage gate, on the reasoning that this push triggers no
+      # CI of its own and refreshed data once dried up a covered branch that then broke
+      # the next human push (WNBA raceScenarios, 2026-08-10). That cannot happen now: the
+      # main suite reads frozen data, so its coverage is the same before and after any
+      # refresh, and running it here would test nothing this job changed.
+      #
+      # `shell: bash` for the pipefail: under the default `bash -e` a pipe's status is
+      # tee's, which always succeeds, and a red gate would read as green. The log is kept
+      # so the issue below can name the failing tests instead of pointing at a run.
+      - name: Install and test against the refreshed data
+        id: gate
+        if: steps.diff.outputs.changed == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          npm ci
+          npm run test:data 2>&1 | tee /tmp/gate.log
+
+      # A red gate is the one class that leaves the site stale, so it stays red, and it
+      # names the failing tests in one deduped issue. One OPEN issue at a time.
+      - name: File the gate failure as an issue
+        if: steps.gate.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Strip ANSI, then keep the lines that name what broke.
+          sed 's/\x1b\[[0-9;]*m//g' /tmp/gate.log \
+            | grep -E '^ FAIL |ERROR: Coverage|AssertionError' \
+            | sort -u | head -40 > /tmp/findings.txt || true
+          if [ ! -s /tmp/findings.txt ]; then
+            echo "(the gate failed but no FAIL or coverage line was found; read the run)" > /tmp/findings.txt
+          fi
+          {
+            echo "### Gate is red"
+            echo '```'
+            cat /tmp/findings.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -n "$(gh issue list --state open --search "\"$GATE_ISSUE\"" --json number --jq '.[0].number')" ]; then
+            echo "Gate issue already open, not re-filing." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          {
+            echo "The refresh fetched new data, and the test gate failed against it, so"
+            echo "nothing was committed. The site is serving the previous snapshot and will"
+            echo "keep doing so until this is fixed. Nothing wrong has shipped."
+            echo
+            echo '```'
+            cat /tmp/findings.txt
+            echo '```'
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo "## What to do"
+            echo
+            echo "1. Reproduce locally: \`node scripts/fetch-schedule.mjs && npm run test:data\`."
+            echo "2. This gate is the live suite in \`test/live/\`: invariants on the refreshed"
+            echo "   data and a smoke render of every view. It has no coverage threshold, so a"
+            echo "   failure means one of two things. Either the DATA is wrong (a null tip, a"
+            echo "   non-numeric stat, an unknown club), in which case fix the fetch script or"
+            echo "   wait for the league to correct it. Or an invariant is too strict for a legitimate"
+            echo "   season state, in which case loosen it: only things true on any day of any"
+            echo "   season belong in \`test/live/\`."
+            echo "3. Commit the fix, then dispatch this workflow. This issue closes itself on the"
+            echo "   next successful commit."
+            echo
+            echo 'Filed by `.github/workflows/refresh-data.yml`.'
+          } > /tmp/issue-body.md
+          gh issue create --title "$GATE_ISSUE" --body-file /tmp/issue-body.md
+          exit 1
+
+      # Commit straight to main (the test above is the gate). This push is authored by
+      # GITHUB_TOKEN, so it does NOT trigger the CI deploy — this workflow deploys itself
+      # in the job below instead.
+      - name: Commit the refreshed data to main
+        id: commit
+        if: steps.diff.outputs.changed == 'true' && steps.gate.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- src/data public/logos
+          git commit -m "Refresh schedule, results, and box scores from unrivaled.basketball"
+          # main can move between this job's checkout and its push: a human push, or a
+          # sibling workflow landing its own commit. A bare `git push` then dies with
+          # "! [rejected] main -> main (fetch first)" and the whole refresh is thrown
+          # away until the next scheduled run. That happened to the WNBA viewer on
+          # 2026-08-29 (this file comes from that repo), when a hand push landed one second before this step. So rebase
+          # our single data commit onto whatever arrived and try again. Rebasing is safe
+          # here because the commit touches only generated paths that nothing else
+          # writes; a real conflict is not resolvable unattended, so we let it fail
+          # loudly instead of forcing.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "::warning::push rejected, rebasing onto origin/main (attempt $attempt)"
+            git fetch --unshallow origin main 2>/dev/null || git fetch origin main
+            git rebase origin/main
+          done
+          echo "::error::could not push the refreshed data after 3 rebase attempts"
+          exit 1
+
+      # A landed commit is the proof that both signals are resolved, whichever was open.
+      - name: Close resolved signal issues
+        if: steps.commit.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for title in "$GATE_ISSUE" "$STALE_ISSUE"; do
+            n=$(gh issue list --state open --search "\"$title\"" --json number --jq '.[0].number')
+            if [ -n "$n" ]; then
+              gh issue close "$n" --comment "Resolved: the refresh committed new data in run ${{ github.run_id }}."
+              echo "Closed #$n ($title)." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Build the site
+        if: steps.commit.outcome == 'success'
+        run: npm run build
+
+      - name: Upload the Pages artifact
+        if: steps.commit.outcome == 'success'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  # Publishes the artifact the refresh job built — only when a commit actually landed.
+  deploy:
+    needs: refresh
+    if: needs.refresh.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    # Serialize Pages deploys across workflows (CI + refresh-data), never mid-cancel.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

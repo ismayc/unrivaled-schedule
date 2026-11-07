@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The Unrivaled Schedule mark: a center circle with three players a side, in the
+       app's chartreuse on its dark ground. Filled paths only (a stroked mark has
+       rendered as a blank square in this family's icon pipeline; see
+       sports-viewer-meta/docs/ICONS.md). No league or club mark. -->
+  <rect width="64" height="64" rx="12" fill="#14121a"/>
+  <path fill="#c4ec3a" fill-rule="evenodd" d="M32 8a24 24 0 1 0 0 48a24 24 0 1 0 0-48Zm0 4.5a19.5 19.5 0 1 1 0 39a19.5 19.5 0 1 1 0-39Z"/>
+  <circle cx="32" cy="23" r="5.2" fill="#c4ec3a"/>
+  <circle cx="23.6" cy="37.5" r="5.2" fill="#c4ec3a"/>
+  <circle cx="40.4" cy="37.5" r="5.2" fill="#c4ec3a"/>
+</svg>

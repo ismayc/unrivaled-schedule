@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Archivo, variable on BOTH axes (width 62-125, weight 400-800): one family
+         used at two extremes, expanded and heavy for numerals and headings. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap"
+    />
+    <title>The Unrivaled Schedule — every game in your timezone</title>
+    <meta
+      name="description"
+      content="An unofficial Unrivaled viewer: every game of the 3-on-3 league in your timezone, standings, the playoff bracket, box scores, leaders, and every past season."
+    />
+    <meta name="theme-color" content="#14121a" />
+    <link rel="canonical" href="https://ismayc.github.io/unrivaled-schedule/" />
+
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Unrivaled" />
+
+    <!-- Open Graph (link previews in Slack/Discord/iMessage/Facebook) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="The Unrivaled Schedule" />
+    <meta property="og:title" content="The Unrivaled Schedule — every game in your timezone" />
+    <meta
+      property="og:description"
+      content="Every Unrivaled game in your timezone, with standings, the playoff bracket, box scores, leaders, and every past season."
+    />
+    <meta property="og:url" content="https://ismayc.github.io/unrivaled-schedule/" />
+    <meta property="og:image" content="https://ismayc.github.io/unrivaled-schedule/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Unrivaled Schedule" />
+
+    <!-- Twitter card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="The Unrivaled Schedule — every game in your timezone" />
+    <meta
+      name="twitter:description"
+      content="Every Unrivaled game in your timezone, with standings, the playoff bracket, box scores, leaders, and every past season."
+    />
+    <meta name="twitter:image" content="https://ismayc.github.io/unrivaled-schedule/og-image.png" />
+
+    <script>
+      // Resolve the theme before first paint so there is no flash of the wrong one.
+      // System preference by default; an explicit choice wins and persists.
+      ;(function () {
+        try {
+          var t = localStorage.getItem('unr:theme')
+          if (!t)
+            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+          document.documentElement.dataset.theme = t
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
