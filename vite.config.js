@@ -41,8 +41,31 @@ const frozenData = () => ({
   },
 })
 
+// `hub-feed.json`, the current season for the family hub, built from the same committed
+// modules as the page (src/utils/hubFeed.js says why the hub needs it). Build only.
+const hubFeed = () => ({
+  name: 'hub-feed',
+  apply: 'build',
+  async generateBundle() {
+    const [{ GAMES }, { TEAMS, SEASON }, { DATA_UPDATED_AT }, { buildHubFeed }] = await Promise.all([
+      import('./src/data/schedule.js'),
+      import('./src/data/teams.js'),
+      import('./src/data/meta.js'),
+      import('./src/utils/hubFeed.js'),
+    ])
+    const feed = buildHubFeed({
+      games: GAMES,
+      teams: TEAMS.filter((t) => t.seasons.includes(SEASON)),
+      season: SEASON,
+      updatedAt: DATA_UPDATED_AT,
+      base: 'https://ismayc.github.io/unrivaled-schedule/',
+    })
+    this.emitFile({ type: 'asset', fileName: 'hub-feed.json', source: JSON.stringify(feed) })
+  },
+})
+
 export default defineConfig({
-  plugins: [react(), frozenData()],
+  plugins: [react(), frozenData(), hubFeed()],
   // Relative base so the same dist/ works at a domain root (Netlify) and under a
   // subpath (GitHub Pages /unrivaled-schedule/).
   base: './',

@@ -83,22 +83,29 @@ export function parseSchedule(tree, where) {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
   'September', 'October', 'November', 'December']
 const DATE_RE = /^(?:Sun|Mon|Tues|Wednes|Thurs|Fri|Satur)day, (\w+) (\d{1,2}), (\d{4})$/
-const TIME_RE = /^(\d{1,2}):(\d{2}) ([AP]M) MST \((\d{1,2}):(\d{2}) ([AP]M) ET\)$/
+// The parenthesized clock is the venue's local zone, not always Eastern: a game at the
+// Intuit Dome or Chase Center prints "9:30 PM MST (8:30 PM PT)". Until November 8, 2026
+// only ET was read, and eight 2027 West Coast games fell through to "Time TBD".
+const TIME_RE = /^(\d{1,2}):(\d{2}) ([AP]M) MST \((\d{1,2}):(\d{2}) ([AP]M) (ET|CT|MT|PT)\)$/
+const ZONES = { ET: 'America/New_York', CT: 'America/Chicago', MT: 'America/Denver', PT: 'America/Los_Angeles' }
+// Words the page uses for a tip time that is not announced yet. Anything else that is not
+// a readable time is an error, never a silent "Time TBD".
+const NO_TIME_RE = /to be set|TBD|TBA/i
 
 const to24 = (h, ampm) => (Number(h) % 12) + (ampm === 'PM' ? 12 : 0)
 
-// The UTC offset of America/New_York at a UTC instant, in minutes (-240 or -300).
-function nyOffsetMinutes(ms) {
+// The UTC offset of an IANA zone at a UTC instant, in minutes (New York: -240 or -300).
+function offsetMinutes(zone, ms) {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', timeZoneName: 'shortOffset',
+    timeZone: zone, timeZoneName: 'shortOffset',
   }).formatToParts(new Date(ms))
   const m = /GMT([+-]\d+)/.exec(parts.find((p) => p.type === 'timeZoneName').value)
   return Number(m[1]) * 60
 }
 
 // "Wednesday, March 04, 2026" + "7:30 PM MST (9:30 PM ET)" → an ISO instant. The MST
-// clock is UTC-7 all year; the ET half is a cross-check, so a page that ever switches to
-// a DST-observing zone fails here instead of shifting every tip by an hour.
+// clock is UTC-7 all year; the local half is a cross-check in its own zone, so a page that
+// ever switches to a DST-observing zone fails here instead of shifting every tip by an hour.
 export function tipFrom(dateText, timeText, where) {
   const d = DATE_RE.exec(dateText)
   const t = TIME_RE.exec(timeText)
@@ -106,9 +113,9 @@ export function tipFrom(dateText, timeText, where) {
   const month = MONTHS.indexOf(d[1])
   if (month < 0) throw new Error(`${where}: unknown month "${d[1]}"`)
   const ms = Date.UTC(Number(d[3]), month, Number(d[2]), to24(t[1], t[3]) + 7, Number(t[2]))
-  const local = new Date(ms + nyOffsetMinutes(ms) * 60000)
+  const local = new Date(ms + offsetMinutes(ZONES[t[7]], ms) * 60000)
   if (local.getUTCHours() !== to24(t[4], t[6]) || local.getUTCMinutes() !== Number(t[5]))
-    throw new Error(`${where}: "${timeText}" is not MST (UTC-7) against the ET clock`)
+    throw new Error(`${where}: "${timeText}" is not MST (UTC-7) against the ${t[7]} clock`)
   return new Date(ms).toISOString()
 }
 
@@ -178,7 +185,7 @@ export function parseGame(tree, id) {
   const dateText = spans.find((s) => DATE_RE.test(s))
   const timeText = spans.find((s) => /MST|time to be set|TBD/i.test(s))
   if (!dateText) throw new Error(`${where}: no date in Game Information`)
-  if (timeText && TIME_RE.test(timeText)) out.tip = tipFrom(dateText, timeText, where)
+  if (timeText && !NO_TIME_RE.test(timeText)) out.tip = tipFrom(dateText, timeText, where)
   else {
     // No tip time yet: keep the day, at noon Arizona time so it lands on the right
     // calendar day in every US zone, and flag it.

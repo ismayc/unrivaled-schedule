@@ -63,8 +63,11 @@ of regular-season games, and each archived season must crown its known champion.
 
 - **Away comes first, everywhere.** The schedule's "Mist vs Phantom" marks Phantom as
   home, and the game page labels Mist's crest "Away Team Logo".
-- **Tip times print in MST all year**, with ET in parentheses, so MST is Arizona's fixed
-  UTC-7. The parser checks each tip against the ET clock and fails if they ever disagree.
+- **Tip times print in MST all year**, with the venue's own clock in parentheses (ET,
+  CT, or PT: "9:30 PM MST (8:30 PM PT)" at the Intuit Dome), so MST is Arizona's fixed
+  UTC-7. The parser checks each tip against the second clock in its own zone and fails if
+  they ever disagree, or if a time label is neither a readable time nor "tip time to be
+  set".
 - **Free throws can be worth one, two, or three points.** Points come from each line's
   PTS column, never from makes. In the 2026 final, Breanna Stewart had 25 points from
   eight twos and three threes, and 7 from four free throws.
@@ -150,6 +153,10 @@ Built with `base: './'`, so the same `dist/` works at a domain root and under a 
 - **The refresh** (`refresh-data.yml`) runs every 30 minutes from 00:00 to 06:30 UTC,
   January through March (5:00 to 11:30 PM Arizona time, which covers every tip so far),
   and once a day all year with `--full`. It commits straight to `main`.
+- **`hub-feed.json`** is written by the build (the `hubFeed` plugin in `vite.config.js`,
+  from `src/utils/hubFeed.js`): the current season for the family hub, which reads ESPN for
+  every other viewer and cannot read this league there. It shares the hub's origin, so it
+  needs no CORS, and it redeploys with every refresh that changes the data.
 - The `webcal://` calendar feed is a Netlify function (`netlify/functions/calendar.mjs`)
   and serves from `the-unrivaled-schedule.netlify.app` once that site is linked; GitHub
   Pages cannot run functions, so on Pages the calendar offers the `.ics` download.

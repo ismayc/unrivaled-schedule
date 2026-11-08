@@ -109,6 +109,13 @@ describe('a game page', () => {
     expect(g.score).toBeUndefined()
   })
 
+  it('reads the tip of a West Coast game, whose second clock is PT', () => {
+    // Saved November 8, 2026. Before the fix this page came back as tbd at 19:00 UTC.
+    const g = parseGame(page('game-pt'), 'adp89x8e4pe4')
+    expect(g).toMatchObject({ tip: '2027-01-09T04:30:00.000Z', venue: 'Intuit Dome', city: 'Inglewood' })
+    expect(g.tbd).toBeUndefined()
+  })
+
   it('keeps the day of a game with no tip time, at noon Arizona time, and flags it', () => {
     expect(parseGame(page('game-tbd'), 't16f8c1ja6jk')).toMatchObject({ tip: '2027-03-05T19:00:00.000Z', tbd: true })
   })
@@ -121,8 +128,20 @@ describe('the tip clock', () => {
     expect(tipFrom('Friday, January 17, 2025', '12:00 PM MST (2:00 PM ET)', 'x')).toBe('2025-01-17T19:00:00.000Z')
   })
 
+  it('reads a venue clock in any US zone, each in its own zone', () => {
+    // The Intuit Dome opener, as the league printed it (checked November 8, 2026). It was
+    // read as "Time TBD" while only ET was understood.
+    expect(tipFrom('Friday, January 08, 2027', '9:30 PM MST (8:30 PM PT)', 'x')).toBe('2027-01-09T04:30:00.000Z')
+    expect(tipFrom('Friday, January 08, 2027', '6:00 PM MST (7:00 PM CT)', 'x')).toBe('2027-01-09T01:00:00.000Z')
+    expect(tipFrom('Friday, January 08, 2027', '6:00 PM MST (6:00 PM MT)', 'x')).toBe('2027-01-09T01:00:00.000Z')
+    // After DST began PT is UTC-7, the same clock as MST.
+    expect(tipFrom('Monday, March 15, 2027', '7:00 PM MST (7:00 PM PT)', 'x')).toBe('2027-03-16T02:00:00.000Z')
+    expect(() => tipFrom('Friday, January 08, 2027', '9:30 PM MST (9:30 PM PT)', 'x')).toThrow(/against the PT clock/)
+  })
+
   it('refuses a clock that is not Arizona time, or text it cannot read', () => {
     expect(() => tipFrom('Monday, March 17, 2025', '4:30 PM MST (6:30 PM ET)', 'x')).toThrow(/not MST/)
+    expect(() => tipFrom('Friday, January 08, 2027', '9:30 PM MST (8:30 PM HT)', 'x')).toThrow(/cannot read the tip/)
     expect(() => tipFrom('March 17', '4:30 PM MST (7:30 PM ET)', 'x')).toThrow(/cannot read the tip/)
     expect(() => tipFrom('Monday, Marchember 17, 2025', '4:30 PM MST (7:30 PM ET)', 'x')).toThrow(/unknown month/)
   })

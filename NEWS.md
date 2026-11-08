@@ -4,6 +4,21 @@ A dated changelog for The Unrivaled Schedule. Each heading is a calendar day; bu
 points capture every change made that day (features, fixes, data and source updates,
 deployment). Newest day on top.
 
+## 2026-11-08
+
+- **Eight West Coast games have their tip times.** The league prints a game's second
+  clock in the venue's zone ("9:30 PM MST (8:30 PM PT)"), and only ET was read, so every
+  game at the Intuit Dome, Chase Center, Target Center, and Toyota Arena showed "Time
+  TBD". Each zone is now checked in its own clock, and a time label the parser cannot read
+  stops the refresh instead of becoming "Time TBD". Four games are still TBD; the league
+  says "tip time to be set" for them.
+- **The family hub can show Unrivaled.** The build publishes `hub-feed.json`, the current
+  season in a small shape the hub reads from the same origin, since the hub's usual source,
+  ESPN, does not carry the league.
+- **The freshness monitor heals before it alarms.** A stale verdict now runs Refresh once
+  and waits up to 20 minutes for it to fetch. Its first run here had filed a false issue,
+  because the day-old repo's daily Refresh had not fired yet.
+
 ## 2026-11-07
 
 - **First release.** Every game of the 2027 season in your timezone, the standings, the
