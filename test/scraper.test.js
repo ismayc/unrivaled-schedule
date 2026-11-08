@@ -17,6 +17,7 @@ import {
   tipFrom,
   channelOf,
   clubAbbr,
+  sameWhen,
 } from '../scripts/lib/unrivaled.mjs'
 import { shortName } from '../scripts/fetch-schedule.mjs'
 
@@ -119,6 +120,30 @@ describe('a game page', () => {
   it('keeps the day of a game with no tip time, at noon Arizona time, and flags it', () => {
     expect(parseGame(page('game-tbd'), 't16f8c1ja6jk')).toMatchObject({ tip: '2027-03-05T19:00:00.000Z', tbd: true })
   })
+
+  // The page prints the tip in the VISITOR's zone. The fixtures were saved from Arizona
+  // (MST); GitHub's CI sees Central time. On November 8, 2026 a CI refresh read every 2027
+  // game as "Time TBD" with its clock stored as the venue. These are the same saved pages
+  // with the labels CI received (copied from the data that refresh committed).
+  const asSeenFrom = (name, from, to) => {
+    const raw = gunzipSync(readFileSync(join(import.meta.dirname, 'fixtures/rsc', `${name}.rsc.gz`))).toString('utf8')
+    expect(raw).toContain(from)
+    return treeFromRsc(raw.replaceAll(from, to))
+  }
+
+  it('reads the same tip whatever zone the page was fetched from', () => {
+    const ct = parseGame(asSeenFrom('game-upcoming', '5:00 PM MST', '6:00 PM CT'), '2q7fjfhslf2f')
+    expect(ct).toMatchObject({ tip: '2027-01-09T00:00:00.000Z', venue: 'TD Garden', city: 'Boston', state: 'MA' })
+    expect(ct.tbd).toBeUndefined()
+    // A venue in the visitor's own zone gets one clock, with no parentheses.
+    const pt = parseGame(asSeenFrom('game-pt', '9:30 PM MST (8:30 PM PT)', '8:30 PM PT'), 'adp89x8e4pe4')
+    expect(pt).toMatchObject({ tip: '2027-01-09T04:30:00.000Z', venue: 'Intuit Dome', city: 'Inglewood' })
+  })
+
+  it('stops on a clock it cannot read, instead of storing it as the venue', () => {
+    expect(() => parseGame(asSeenFrom('game-upcoming', '5:00 PM MST', '6:00 PM CST'), 'x')).toThrow(/cannot read the tip/)
+    expect(() => parseGame(asSeenFrom('game-tbd', 'Time TBD', 'Time later'), 'x')).toThrow(/no tip time and no "to be set"/)
+  })
 })
 
 describe('the tip clock', () => {
@@ -136,11 +161,23 @@ describe('the tip clock', () => {
     expect(tipFrom('Friday, January 08, 2027', '6:00 PM MST (6:00 PM MT)', 'x')).toBe('2027-01-09T01:00:00.000Z')
     // After DST began PT is UTC-7, the same clock as MST.
     expect(tipFrom('Monday, March 15, 2027', '7:00 PM MST (7:00 PM PT)', 'x')).toBe('2027-03-16T02:00:00.000Z')
-    expect(() => tipFrom('Friday, January 08, 2027', '9:30 PM MST (9:30 PM PT)', 'x')).toThrow(/against the PT clock/)
+    expect(() => tipFrom('Friday, January 08, 2027', '9:30 PM MST (9:30 PM PT)', 'x')).toThrow(/MST and PT clocks disagree/)
   })
 
-  it('refuses a clock that is not Arizona time, or text it cannot read', () => {
-    expect(() => tipFrom('Monday, March 17, 2025', '4:30 PM MST (6:30 PM ET)', 'x')).toThrow(/not MST/)
+  it('reads a first clock in any US zone, across DST, with or without a venue clock', () => {
+    // The labels GitHub's CI received for the 2027 opener night (Central time).
+    expect(tipFrom('Friday, January 08, 2027', '6:00 PM CT (7:00 PM ET)', 'x')).toBe('2027-01-09T00:00:00.000Z')
+    expect(tipFrom('Friday, January 08, 2027', '10:30 PM CT (8:30 PM PT)', 'x')).toBe('2027-01-09T04:30:00.000Z')
+    expect(tipFrom('Friday, January 08, 2027', '8:00 PM CT', 'x')).toBe('2027-01-09T02:00:00.000Z')
+    // After DST began on March 14, 2027, CT is UTC-5 and MST still UTC-7.
+    expect(tipFrom('Monday, March 15, 2027', '9:00 PM CT (7:00 PM PT)', 'x')).toBe('2027-03-16T02:00:00.000Z')
+    expect(tipFrom('Monday, March 15, 2027', '7:00 PM MST', 'x')).toBe('2027-03-16T02:00:00.000Z')
+    expect(tipFrom('Monday, March 15, 2027', '10:00 PM ET', 'x')).toBe('2027-03-16T02:00:00.000Z')
+    expect(tipFrom('Monday, March 15, 2027', '8:00 PM MT', 'x')).toBe('2027-03-16T02:00:00.000Z')
+  })
+
+  it('refuses clocks that disagree, or text it cannot read', () => {
+    expect(() => tipFrom('Monday, March 17, 2025', '4:30 PM MST (6:30 PM ET)', 'x')).toThrow(/MST and ET clocks disagree/)
     expect(() => tipFrom('Friday, January 08, 2027', '9:30 PM MST (8:30 PM HT)', 'x')).toThrow(/cannot read the tip/)
     expect(() => tipFrom('March 17', '4:30 PM MST (7:30 PM ET)', 'x')).toThrow(/cannot read the tip/)
     expect(() => tipFrom('Monday, Marchember 17, 2025', '4:30 PM MST (7:30 PM ET)', 'x')).toThrow(/unknown month/)
@@ -203,5 +240,27 @@ describe('names', () => {
   it('knows every club the site names, and only those', () => {
     expect(clubAbbr('Lunar Owls', 'x')).toBe('LUN')
     expect(() => clubAbbr(undefined, 'x')).toThrow(/unknown club/)
+  })
+})
+
+describe('the schedule label, compared across zones', () => {
+  // CI committed "6:00 PM CT"; a refresh from Arizona reads "5:00 PM MST" for the same
+  // game. Compared as text, every game looked changed and a local refresh refetched all 55.
+  const opener = '2027-01-09T00:00:00.000Z'
+  it('treats one time in two zones as the same label', () => {
+    expect(sameWhen('6:00 PM CT', '5:00 PM MST', opener)).toBe(true)
+    expect(sameWhen('6:00 PM CT', '7:00 PM ET', opener)).toBe(true)
+    expect(sameWhen('10:30 PM CT', '9:30 PM MST', opener)).toBe(true) // 04:30 UTC, past midnight
+    // After DST: CT is UTC-5, MST still UTC-7, so they are two hours apart.
+    expect(sameWhen('9:00 PM CT', '7:00 PM MST', '2027-03-16T02:00:00.000Z')).toBe(true)
+    expect(sameWhen('tip time to be set', 'tip time to be set', opener)).toBe(true)
+  })
+
+  it('sees a real change, and a time set or unset', () => {
+    expect(sameWhen('6:00 PM CT', '6:00 PM MST', opener)).toBe(false)
+    expect(sameWhen('tip time to be set', '5:00 PM MST', opener)).toBe(false)
+    expect(sameWhen('5:00 PM MST', 'tip time to be set', opener)).toBe(false)
+    expect(sameWhen(undefined, '5:00 PM MST', opener)).toBe(false)
+    expect(sameWhen('6:00 PM CT', '5:00 PM MST', undefined)).toBe(false)
   })
 })

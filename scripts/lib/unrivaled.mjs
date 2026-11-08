@@ -10,8 +10,10 @@
 // Facts checked against the live pages on November 7, 2026:
 //   - Order is away then home everywhere: the schedule's "Mist vs Phantom" marks Phantom
 //     with the home class, and the game page labels Mist's crest "Away Team Logo".
-//   - Tip times print in MST all year, with ET in parentheses, so MST is Arizona's fixed
-//     UTC-7 (the March 17, 2025 final reads "4:30 PM MST (7:30 PM ET)", after DST began).
+//   - Tip times print in the visitor's zone, with the venue's zone in parentheses. From
+//     Arizona that is MST, a fixed UTC-7 (the March 17, 2025 final reads "4:30 PM MST
+//     (7:30 PM ET)", after DST began). This list first said "MST all year", which was true
+//     only from Arizona; see the tip clock below (corrected November 8, 2026).
 //   - Free throws can be worth 1, 2 or 3 points in this league, so a player's points are
 //     read from the PTS column and never rebuilt from makes.
 
@@ -83,16 +85,33 @@ export function parseSchedule(tree, where) {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
   'September', 'October', 'November', 'December']
 const DATE_RE = /^(?:Sun|Mon|Tues|Wednes|Thurs|Fri|Satur)day, (\w+) (\d{1,2}), (\d{4})$/
-// The parenthesized clock is the venue's local zone, not always Eastern: a game at the
-// Intuit Dome or Chase Center prints "9:30 PM MST (8:30 PM PT)". Until November 8, 2026
-// only ET was read, and eight 2027 West Coast games fell through to "Time TBD".
-const TIME_RE = /^(\d{1,2}):(\d{2}) ([AP]M) MST \((\d{1,2}):(\d{2}) ([AP]M) (ET|CT|MT|PT)\)$/
-const ZONES = { ET: 'America/New_York', CT: 'America/Chicago', MT: 'America/Denver', PT: 'America/Los_Angeles' }
+// The tip prints in the VISITOR's zone, then in the venue's zone in parentheses when the
+// two differ (checked November 8, 2026, and the site runs on Vercel, so the zone is most
+// likely the requester's IP location; unverified):
+//   from Arizona       "9:30 PM MST (8:30 PM PT)"   "5:00 PM MST (7:00 PM ET)"
+//   from GitHub's CI   "10:30 PM CT (8:30 PM PT)"   "8:00 PM CT" (a Central venue: one clock)
+// Until November 8, 2026 the parser required MST. Every 2027 game the CI refresh read came
+// back as "Time TBD" with the clock stored as the venue, because a page that did not
+// match fell through to the no-time branch. Now any clock-like text must parse or throw.
+const CLOCK = String.raw`(\d{1,2}):(\d{2}) ([AP]M) (MST|ET|CT|MT|PT)`
+const TIME_RE = new RegExp(`^${CLOCK}(?: \\(${CLOCK}\\))?$`)
+const WHEN_RE = new RegExp(`^${CLOCK}$`)
+const CLOCK_START = /^\d{1,2}:\d{2} [AP]M\b/
+// MST is Arizona's label (no DST); the others are generic and follow DST.
+const ZONES = {
+  MST: 'America/Phoenix',
+  ET: 'America/New_York',
+  CT: 'America/Chicago',
+  MT: 'America/Denver',
+  PT: 'America/Los_Angeles',
+}
 // Words the page uses for a tip time that is not announced yet. Anything else that is not
 // a readable time is an error, never a silent "Time TBD".
-const NO_TIME_RE = /to be set|TBD|TBA/i
+// ("Time TBD" on a game page, "tip time to be set" on the schedule).
+const NO_TIME_RE = /to be set|\bTB[DA]\b/
 
 const to24 = (h, ampm) => (Number(h) % 12) + (ampm === 'PM' ? 12 : 0)
+const minutesOf = (h, mm, ampm) => to24(h, ampm) * 60 + Number(mm)
 
 // The UTC offset of an IANA zone at a UTC instant, in minutes (New York: -240 or -300).
 function offsetMinutes(zone, ms) {
@@ -103,20 +122,47 @@ function offsetMinutes(zone, ms) {
   return Number(m[1]) * 60
 }
 
-// "Wednesday, March 04, 2026" + "7:30 PM MST (9:30 PM ET)" → an ISO instant. The MST
-// clock is UTC-7 all year; the local half is a cross-check in its own zone, so a page that
-// ever switches to a DST-observing zone fails here instead of shifting every tip by an hour.
+// A wall-clock time on a calendar day in an IANA zone → the UTC instant, in ms.
+function utcFromLocal(y, month, day, minutes, zone) {
+  const asUtc = Date.UTC(y, month, day) + minutes * 60000
+  const first = asUtc - offsetMinutes(zone, asUtc) * 60000
+  return asUtc - offsetMinutes(zone, first) * 60000
+}
+
+// "Wednesday, March 04, 2026" + "7:30 PM MST (9:30 PM ET)" → an ISO instant. The first
+// clock, in its own zone, gives the instant (the date is printed in that zone too). The
+// venue clock, when there is one, is a cross-check in ITS zone, so a zone read wrong
+// fails here instead of shifting a tip by an hour.
 export function tipFrom(dateText, timeText, where) {
   const d = DATE_RE.exec(dateText)
   const t = TIME_RE.exec(timeText)
   if (!d || !t) throw new Error(`${where}: cannot read the tip from "${dateText}" / "${timeText}"`)
   const month = MONTHS.indexOf(d[1])
   if (month < 0) throw new Error(`${where}: unknown month "${d[1]}"`)
-  const ms = Date.UTC(Number(d[3]), month, Number(d[2]), to24(t[1], t[3]) + 7, Number(t[2]))
-  const local = new Date(ms + offsetMinutes(ZONES[t[7]], ms) * 60000)
-  if (local.getUTCHours() !== to24(t[4], t[6]) || local.getUTCMinutes() !== Number(t[5]))
-    throw new Error(`${where}: "${timeText}" is not MST (UTC-7) against the ${t[7]} clock`)
+  const ms = utcFromLocal(Number(d[3]), month, Number(d[2]), minutesOf(t[1], t[2], t[3]), ZONES[t[4]])
+  if (t[5]) {
+    const local = new Date(ms + offsetMinutes(ZONES[t[8]], ms) * 60000)
+    if (local.getUTCHours() * 60 + local.getUTCMinutes() !== minutesOf(t[5], t[6], t[7]))
+      throw new Error(`${where}: in "${timeText}" the ${t[4]} and ${t[8]} clocks disagree`)
+  }
   return new Date(ms).toISOString()
+}
+
+// The schedule page's tip label ("6:00 PM CT", "5:00 PM MST") follows the visitor's zone
+// too, so a refresh run from another zone saw every label as changed and refetched every
+// game. Two labels are the same when they name the same UTC time of day, with each zone's
+// offset taken at `refIso` (the game's committed tip). Labels that are not clocks ("tip
+// time to be set") compare as text.
+export function sameWhen(a, b, refIso) {
+  if (a === b) return true
+  const ms = Date.parse(refIso)
+  const key = (label) => {
+    const m = WHEN_RE.exec(label || '')
+    if (!m || !Number.isFinite(ms)) return null
+    return (((minutesOf(m[1], m[2], m[3]) - offsetMinutes(ZONES[m[4]], ms)) % 1440) + 1440) % 1440
+  }
+  const ka = key(a)
+  return ka !== null && ka === key(b)
 }
 
 // Where-to-watch links → channel names. A link we do not know is kept by host, so a new
@@ -183,9 +229,12 @@ export function parseGame(tree, id) {
   const section = sectionOf(tree, info)
   const spans = [...walk(section)].filter((n) => n.type === 'span').map((n) => textOf(n).trim())
   const dateText = spans.find((s) => DATE_RE.test(s))
-  const timeText = spans.find((s) => /MST|time to be set|TBD/i.test(s))
+  // Positive matches only: a span that starts like a clock IS the tip and must parse, and
+  // only the page's own no-time words make a game TBD. A page with neither stops here.
+  const timeText = spans.find((s) => CLOCK_START.test(s) || NO_TIME_RE.test(s))
   if (!dateText) throw new Error(`${where}: no date in Game Information`)
-  if (timeText && !NO_TIME_RE.test(timeText)) out.tip = tipFrom(dateText, timeText, where)
+  if (!timeText) throw new Error(`${where}: no tip time and no "to be set" in Game Information`)
+  if (CLOCK_START.test(timeText)) out.tip = tipFrom(dateText, timeText, where)
   else {
     // No tip time yet: keep the day, at noon Arizona time so it lands on the right
     // calendar day in every US zone, and flag it.
@@ -196,6 +245,7 @@ export function parseGame(tree, id) {
   const dateIdx = spans.indexOf(dateText)
   const venueIdx = spans.findIndex((s, i) => i > dateIdx && s !== timeText && !DATE_RE.test(s) && s !== 'Where to Watch')
   out.venue = spans[venueIdx] || null
+  if (CLOCK_START.test(out.venue || '')) throw new Error(`${where}: the venue reads as a clock, "${out.venue}"`)
   const place = (spans[venueIdx + 1] || '').split(',').map((s) => s.trim()).filter(Boolean)
   out.city = place[0] || null
   out.state = place[1] || null

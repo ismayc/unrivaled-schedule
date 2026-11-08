@@ -63,11 +63,13 @@ of regular-season games, and each archived season must crown its known champion.
 
 - **Away comes first, everywhere.** The schedule's "Mist vs Phantom" marks Phantom as
   home, and the game page labels Mist's crest "Away Team Logo".
-- **Tip times print in MST all year**, with the venue's own clock in parentheses (ET,
-  CT, or PT: "9:30 PM MST (8:30 PM PT)" at the Intuit Dome), so MST is Arizona's fixed
-  UTC-7. The parser checks each tip against the second clock in its own zone and fails if
-  they ever disagree, or if a time label is neither a readable time nor "tip time to be
-  set".
+- **Tip times print in the visitor's time zone**, with the venue's own clock in
+  parentheses when the two differ. From Arizona the Intuit Dome opener reads "9:30 PM MST
+  (8:30 PM PT)"; GitHub's CI gets "10:30 PM CT (8:30 PM PT)", and "8:00 PM CT" for a
+  Central venue. The parser reads the first clock in its own zone, checks it against the
+  venue clock, and fails if they disagree, or if a time label is neither a readable time
+  nor the league's "to be set" or "TBD". The refresh compares schedule labels as UTC
+  times, so a run from another zone does not refetch every game.
 - **Free throws can be worth one, two, or three points.** Points come from each line's
   PTS column, never from makes. In the 2026 final, Breanna Stewart had 25 points from
   eight twos and three threes, and 7 from four free throws.

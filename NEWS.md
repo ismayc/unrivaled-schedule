@@ -6,6 +6,13 @@ deployment). Newest day on top.
 
 ## 2026-11-08
 
+- **Every 2027 tip time is back, and a refresh reads them from any time zone.** The league
+  prints a tip in the visitor's zone, and GitHub's CI sees Central time, not Arizona's
+  MST. The parser required MST, so this morning's CI refresh stored all 52 timed 2027
+  games as "Time TBD", each with its clock in place of the venue. The parser now reads a
+  clock in any US zone, stops on one it cannot read, and the live suite fails if a venue
+  or city holds a clock. A refresh from a different zone also refetched every game,
+  because the schedule's labels looked changed; they are now compared as UTC times.
 - **A new-season watch.** A daily workflow reads the season picker on the league's
   schedule page. The day it lists 2028, the watch files an issue, and once the full
   schedule is posted and the 2027 Championship is final, it drafts the rollover PR. The

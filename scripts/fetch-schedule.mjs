@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { sleep } from './lib/fetch.mjs'
 import { createDataWriter } from './lib/stamp.mjs'
 import { getPage, PAUSE_MS, HEADERS, requestCount, countRequest } from './lib/page.mjs'
-import { SITE, CLUBS, parseSchedule, parseGame, parseBoxScore, boxGaps } from './lib/unrivaled.mjs'
+import { SITE, CLUBS, parseSchedule, parseGame, parseBoxScore, boxGaps, sameWhen } from './lib/unrivaled.mjs'
 import { SEASON as COMMITTED_SEASON } from '../src/data/teams.js'
 import { GAMES as COMMITTED_GAMES } from '../src/data/schedule.js'
 import { HISTORY as COMMITTED_HISTORY } from '../src/data/history.js'
@@ -107,7 +107,8 @@ async function buildSeason(year, committed) {
     const oldBox = COMMITTED_BOX[s.id]
     const settled = old?.score && oldBox && s.final && old.score.join() === s.score.join()
     const near = old?.tip && Date.parse(old.tip) > now - NEAR_MS.before && Date.parse(old.tip) < now + NEAR_MS.after
-    const labelChanged = old && !old.score && !s.final && old.when !== s.when
+    // Compared as UTC times: the label follows the requester's zone (see sameWhen).
+    const labelChanged = old && !old.score && !s.final && !sameWhen(old.when, s.when, old.tip)
     if (settled) {
       games.push(old)
       box[s.id] = oldBox

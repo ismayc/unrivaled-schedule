@@ -42,6 +42,20 @@ describe('every game', () => {
       }
     })
 
+    // On November 8, 2026 a CI refresh got its tip clocks in Central time, which the parser
+    // did not read: all 52 timed 2027 games were committed as "Time TBD", each with its
+    // clock as the venue ("6:00 PM CT (7:00 PM ET)") and the venue as the city, and this
+    // suite passed. A game is TBD only when the schedule's own label says so, and a place
+    // is never a clock.
+    it(`${s.year}: a TBD game has no tip label, and no place field holds a clock`, () => {
+      const clock = /^\d{1,2}:\d{2} [AP]M\b/
+      for (const g of s.games) {
+        for (const f of ['venue', 'city', 'state']) expect(g[f] || '', `${g.id} ${f}`).not.toMatch(clock)
+        if (g.state) expect(g.state, g.id).toMatch(/^[A-Z]{2}$/)
+        if (g.timeTbd && g.when) expect(g.when, `${g.id} is TBD, but the schedule says ${g.when}`).not.toMatch(clock)
+      }
+    })
+
     it(`${s.year}: every club plays the same number of regular-season games`, () => {
       const per = {}
       for (const g of s.games.filter((x) => x.seasonType === 'regular' && !x.postponed))
