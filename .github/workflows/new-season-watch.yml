@@ -1,0 +1,164 @@
+name: New season watch
+
+# Nothing rolls over on its own: the refresh follows the committed teams.js season. So
+# this watches for the day Unrivaled posts the next season's schedule, opens an issue,
+# and drafts the rollover PR. The rollover is then a decision, and the fetching is
+# already done when you make it.
+#
+# The family's other watches probe ESPN's scoreboard, which does not carry this league.
+# This one reads the league's own schedule page: two requests a run at most. See
+# scripts/lib/season-watch.mjs for the release signal (the season picker) and the trap
+# it avoids (an unknown `?season=` returns the current season's games).
+#
+# Quiet by design: a "not yet" run writes a line to the job summary and nothing else.
+# Only a release opens an issue, and only once.
+
+on:
+  schedule:
+    # Daily, all year. The league names no release date, and the once-ever guards
+    # below make a year-round watch harmless.
+    - cron: '25 16 * * *'
+  workflow_dispatch:
+
+# Scheduler delays can bunch runs together. The once-ever guards check before they
+# create, so two runs in flight at once could double-file. Queue instead.
+concurrency:
+  group: new-season-watch
+  cancel-in-progress: false
+
+permissions:
+  issues: write # the default token is read-only, so opening an issue needs this
+  contents: write # push the rollover branch
+  pull-requests: write # open the draft rollover PR
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # Node built-ins only, so no install step. `shell: bash` for pipefail: under the
+      # default `bash -e` the pipe's status is tee's, so a crash in the script left the
+      # step green and every later step skipped (the WNBA watch hid an outage this way on
+      # August 16, 2026).
+      - name: Check whether the next season is published
+        id: check
+        shell: bash
+        run: node scripts/check-new-season.mjs | tee -a "$GITHUB_OUTPUT"
+
+      - name: Say what was found
+        env:
+          SUMMARY: ${{ steps.check.outputs.summary }}
+        run: echo "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+
+      # One issue per season, ever: the search covers open AND closed issues, so closing
+      # the issue does not make the next run open another.
+      - name: Open an issue the day it lands
+        if: steps.check.outputs.released == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEASON: ${{ steps.check.outputs.season }}
+          YEAR: ${{ steps.check.outputs.year }}
+          COUNT: ${{ steps.check.outputs.count }}
+          PARTIAL: ${{ steps.check.outputs.partial }}
+          READY: ${{ steps.check.outputs.ready }}
+          SUMMARY: ${{ steps.check.outputs.summary }}
+        run: |
+          TITLE="Unrivaled $SEASON schedule is out: roll the viewer over"
+          if [ -n "$(gh issue list --state all --search "$TITLE" --json number --jq '.[0].number')" ]; then
+            echo "Already filed for $SEASON, nothing to do." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # The body goes through a file, not a heredoc inside $( ): an apostrophe in
+          # the prose is enough to break the latter.
+          cat > /tmp/issue-body.md <<EOF
+          $SUMMARY
+
+          Found by \`scripts/check-new-season.mjs\` on $(date -u +%Y-%m-%d).
+          Partial release: \`$PARTIAL\` ($COUNT games; the floor is about 90% of the
+          committed regular season). Rollover PR drafted: \`$READY\`.
+
+          ## Rolling over
+
+          1. If the summary names an unknown club, add it to \`CLUBS\` in
+             \`scripts/lib/unrivaled.mjs\` (abbreviation, name, the site's slug, colors).
+          2. Add the finished season's champion to \`CHAMPIONS\` in
+             \`scripts/fetch-schedule.mjs\`.
+          3. Pull the new season: \`node scripts/fetch-schedule.mjs --season $YEAR --full\`.
+             The finished season moves into \`history.js\` in the same run.
+          4. Run \`npm run test:data\`. The coverage suite reads frozen copies of the
+             data and does not move, but this live suite reads the new season, and a
+             check pinned to the old one is the annual chore, not a regression.
+
+          The watch drafts the PR only for a complete release, and only once the
+          committed season's Championship is final. Until then, roll over by hand
+          or wait for a later run.
+          EOF
+          gh issue create --title "$TITLE" --body-file /tmp/issue-body.md
+
+      # And do the fetching, on a branch, as a DRAFT PR: the mechanical half of the
+      # rollover, so what is left is the judgment half (the champion, the live suite).
+      #
+      # Only when `ready`: a complete release AND a finished committed season. The refresh
+      # refuses to archive a season with no final Championship, and a partial release
+      # would commit half a season that the branch guard then never refetches.
+      #
+      # One PR per season, ever: an existing season-<year> branch (open, merged, or
+      # abandoned) means this already ran. NEVER delete that branch after merging: its
+      # existence is the once-per-season guard.
+      - name: Draft the rollover PR
+        if: steps.check.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEASON: ${{ steps.check.outputs.season }}
+          YEAR: ${{ steps.check.outputs.year }}
+          COUNT: ${{ steps.check.outputs.count }}
+        run: |
+          BRANCH="season-$SEASON"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch \`$BRANCH\` already exists, so the rollover PR is already drafted." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+          node scripts/fetch-schedule.mjs --season "$YEAR" --full
+
+          if git diff --quiet -- src/data public/logos; then
+            echo "Fetched $SEASON but nothing changed, so no PR opened." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git add -A -- src/data public/logos
+          git commit -m "Roll the viewer over to the $SEASON season"
+          git push -u origin "$BRANCH"
+
+          cat > /tmp/pr-body.md <<EOF
+          Drafted by \`New season watch\` on $(date -u +%Y-%m-%d): Unrivaled has
+          published the $SEASON schedule ($COUNT games), so this pulls it in with
+          \`node scripts/fetch-schedule.mjs --season $YEAR --full\`. The finished
+          season moved into \`history.js\` in the same run.
+
+          ## What is left for a person
+
+          - Add the finished season's champion to \`CHAMPIONS\` in
+            \`scripts/fetch-schedule.mjs\`.
+          - Run \`npm run test:data\`. The coverage suite reads frozen copies of the
+            data and does not move, but this live suite reads the new season, and a
+            check pinned to the old one is the chore, not a regression.
+
+          No checks run on this PR until then: it was pushed by \`GITHUB_TOKEN\`, and
+          GitHub does not start workflows for those pushes. Your first commit to
+          \`$BRANCH\` starts CI.
+
+          Nothing switches on its own: the refresh follows the committed
+          \`teams.js\` season, so the site stays on the finished season until this
+          PR merges.
+          EOF
+          gh pr create --draft --base main --head "$BRANCH" \
+            --title "Roll the viewer over to the $SEASON season" --body-file /tmp/pr-body.md

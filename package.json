@@ -16,8 +16,8 @@
     "test:data": "LIVE_DATA=1 vitest run",
     "coverage:badge": "vitest run --coverage && node scripts/coverage-badge.mjs",
     "fetch:schedule": "node scripts/fetch-schedule.mjs",
-    "check:schedule": "node scripts/check-schedule.mjs",
-    "fetch:full": "node scripts/fetch-schedule.mjs --full"
+    "fetch:full": "node scripts/fetch-schedule.mjs --full",
+    "check:new-season": "node scripts/check-new-season.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

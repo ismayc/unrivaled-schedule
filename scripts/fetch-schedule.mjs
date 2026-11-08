@@ -15,9 +15,9 @@
 import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { sleep, backoffMs } from './lib/fetch.mjs'
+import { sleep } from './lib/fetch.mjs'
 import { createDataWriter } from './lib/stamp.mjs'
-import { treeFromRsc } from './lib/rsc.mjs'
+import { getPage, PAUSE_MS, HEADERS, requestCount, countRequest } from './lib/page.mjs'
 import { SITE, CLUBS, parseSchedule, parseGame, parseBoxScore, boxGaps } from './lib/unrivaled.mjs'
 import { SEASON as COMMITTED_SEASON } from '../src/data/teams.js'
 import { GAMES as COMMITTED_GAMES } from '../src/data/schedule.js'
@@ -66,31 +66,6 @@ const FORFEITS = {
   ],
 }
 
-const PAUSE_MS = 400
-const HEADERS = {
-  RSC: '1',
-  'User-Agent':
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-}
-
-let requests = 0
-async function getPage(path, tries = 4) {
-  let last
-  for (let attempt = 0; attempt < tries; attempt++) {
-    if (attempt) await sleep(backoffMs(attempt - 1))
-    await sleep(PAUSE_MS)
-    requests++
-    try {
-      const res = await fetch(SITE + path, { headers: HEADERS })
-      if (res.ok) return treeFromRsc(await res.text())
-      last = new Error(`HTTP ${res.status}`)
-      if (res.status < 500 && res.status !== 429) break
-    } catch (err) {
-      last = err
-    }
-  }
-  throw new Error(`${SITE}${path}\n  ${last.message}`)
-}
 
 // ── Round labels → the family's seasonType/round fields ────────────────────────
 const ROUNDS = { 'First Round': 'R1', Quarterfinals: 'R1', Semifinals: 'SF', Championship: 'Final' }
@@ -319,7 +294,7 @@ async function writeLogos(data) {
     const src = srcs.get(c.slug)
     if (!src) throw new Error(`/clubs: no crest found for ${c.name}`)
     await sleep(PAUSE_MS)
-    requests++
+    countRequest()
     // Next.js's image endpoint serves the 1300px crest at 128px (~5KB).
     const res = await fetch(`${SITE}/_next/image?url=${encodeURIComponent(src)}&w=128&q=75`, { headers: { 'User-Agent': HEADERS['User-Agent'] } })
     if (!res.ok || !/image\/png/.test(res.headers.get('content-type') || ''))
@@ -356,7 +331,7 @@ async function main() {
   await put('src/data/history.js', historyModule(archive))
   await put('src/data/boxscores.js', boxModule(allBox))
   if (WITH_LOGOS) await writeLogos(data)
-  console.log(`${requests} requests; changed: ${wrote.join(', ') || 'nothing'}${data.stampedAt ? `; stamped ${data.stampedAt}` : ''}`)
+  console.log(`${requestCount()} requests; changed: ${wrote.join(', ') || 'nothing'}${data.stampedAt ? `; stamped ${data.stampedAt}` : ''}`)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) await main()

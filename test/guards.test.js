@@ -68,11 +68,47 @@ describe('the data source', () => {
   // The league's server ignores nothing a scraper sends, so the only thing between
   // this refresh and a hammered site is the pause between requests. Keep it.
   it('pauses between requests and fetches one page at a time', () => {
-    const src = read('scripts/fetch-schedule.mjs')
-    const pause = src.match(/^const PAUSE_MS = (\d+)$/m)
+    const page = read('scripts/lib/page.mjs')
+    const pause = page.match(/^export const PAUSE_MS = (\d+)$/m)
     expect(pause, 'no PAUSE_MS').not.toBeNull()
     expect(Number(pause[1])).toBeGreaterThanOrEqual(300)
-    expect(src).not.toMatch(/mapLimit|Promise\.all/)
+    expect(page).toMatch(/await sleep\(PAUSE_MS\)\n\s+requests\+\+\n\s+try \{\n\s+const res = await fetch/)
+    for (const f of ['scripts/fetch-schedule.mjs', 'scripts/check-new-season.mjs']) {
+      expect(read(f), f).not.toMatch(/mapLimit|Promise\.all/)
+    }
+  })
+})
+
+describe('the new-season watch', () => {
+  // On November 8, 2026 the league answered `/schedule?season=2028` (and 2099) with HTTP
+  // 200 and the 56 games of 2027. The shape of the mistake: a port of the ESPN watch
+  // that counts the games on `?season=NEXT` and reports a release on its first run.
+  it('trusts the next season only when the page says it is showing that season', () => {
+    const src = read('scripts/check-new-season.mjs')
+    expect(src).toMatch(/const listed = years\.includes\(NEXT\)/)
+    expect(src).toMatch(/if \(shown !== NEXT\) throw/)
+  })
+
+  // Nothing waits on the watch, so a short 5xx burst should cost time, not a red run.
+  it('gives each page a longer retry budget than the refresh', () => {
+    const src = read('scripts/check-new-season.mjs')
+    const tries = src.match(/^const WATCH_TRIES = (\d+)$/m)
+    expect(tries, 'no WATCH_TRIES constant').not.toBeNull()
+    expect(Number(tries[1])).toBeGreaterThanOrEqual(8)
+    expect(src.match(/getPage\([^)]*\)/g)).toEqual([
+      "getPage('/schedule', WATCH_TRIES)",
+      'getPage(path, WATCH_TRIES)',
+    ])
+  })
+
+  // The refresh refuses to archive a season with no final Championship, and a partial
+  // release committed on the branch is never refetched (the branch is the once-ever
+  // guard). So the PR step runs on `ready`, never on `released` alone.
+  it('drafts the rollover PR only when the release is complete and the season is over', () => {
+    const yml = read('.github/workflows/new-season-watch.yml')
+    expect(yml).toMatch(/- name: Draft the rollover PR\n\s+if: steps\.check\.outputs\.ready == 'true'\n/)
+    expect(yml).toMatch(/gh issue list --state all --search "\$TITLE"/)
+    expect(yml).toMatch(/git ls-remote --exit-code --heads origin "\$BRANCH"/)
   })
 })
 

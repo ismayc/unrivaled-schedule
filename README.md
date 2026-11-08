@@ -118,6 +118,7 @@ npm run coverage:badge   # tests with coverage, writes public/coverage.json
 
 npm run fetch:schedule   # refresh the schedules and the games within half a day of now
 npm run fetch:full       # refetch every unplayed game (tip times and channels set weeks ahead)
+npm run check:new-season # has the league posted next season's schedule? (two requests)
 node test/fixtures/make-frozen.mjs   # rebuild the frozen test data from the committed data
 ```
 
@@ -153,6 +154,14 @@ Built with `base: './'`, so the same `dist/` works at a domain root and under a 
 - **The refresh** (`refresh-data.yml`) runs every 30 minutes from 00:00 to 06:30 UTC,
   January through March (5:00 to 11:30 PM Arizona time, which covers every tip so far),
   and once a day all year with `--full`. It commits straight to `main`.
+- **The new-season watch** (`new-season-watch.yml`) runs daily. Nothing rolls over on its
+  own: the refresh follows the season committed in `src/data/teams.js`. The watch reads the
+  season picker on the league's schedule page, and the day it lists the next season, the
+  watch files one issue. Once that schedule is complete and the committed season's
+  Championship is final, it also drafts the rollover PR (`--season NEXT --full` on a
+  `season-NEXT` branch; never delete that branch, it is the once-per-season guard). The
+  picker is the signal because `/schedule?season=` for a season the site lacks answers
+  with the current season's games.
 - **`hub-feed.json`** is written by the build (the `hubFeed` plugin in `vite.config.js`,
   from `src/utils/hubFeed.js`): the current season for the family hub, which reads ESPN for
   every other viewer and cannot read this league there. It shares the hub's origin, so it

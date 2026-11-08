@@ -6,6 +6,13 @@ deployment). Newest day on top.
 
 ## 2026-11-08
 
+- **A new-season watch.** A daily workflow reads the season picker on the league's
+  schedule page. The day it lists 2028, the watch files an issue, and once the full
+  schedule is posted and the 2027 Championship is final, it drafts the rollover PR. The
+  picker is the signal, not the game count, because the league answers a request for a
+  season it does not have with the current season's games. The page reader moved to
+  `scripts/lib/page.mjs` so the refresh and the watch share it. The `check:schedule`
+  npm script pointed at a file that never existed and is gone.
 - **Eight West Coast games have their tip times.** The league prints a game's second
   clock in the venue's zone ("9:30 PM MST (8:30 PM PT)"), and only ET was read, so every
   game at the Intuit Dome, Chase Center, Target Center, and Toyota Arena showed "Time
