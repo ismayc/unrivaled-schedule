@@ -168,9 +168,13 @@ Built with `base: './'`, so the same `dist/` works at a domain root and under a 
   from `src/utils/hubFeed.js`): the current season for the family hub, which reads ESPN for
   every other viewer and cannot read this league there. It shares the hub's origin, so it
   needs no CORS, and it redeploys with every refresh that changes the data.
-- The `webcal://` calendar feed is a Netlify function (`netlify/functions/calendar.mjs`)
-  and serves from `the-unrivaled-schedule.netlify.app` once that site is linked; GitHub
-  Pages cannot run functions, so on Pages the calendar offers the `.ics` download.
+- **Netlify** (`the-unrivaled-schedule.netlify.app`, linked November 8, 2026) builds the
+  same site from every push to `main` through Netlify's GitHub integration, refresh
+  commits included, using `netlify.toml`. It also serves the `webcal://` calendar feed, a
+  Netlify function (`netlify/functions/calendar.mjs`, `/calendar.ics?teams=MIS,ROS` for
+  chosen clubs). GitHub Pages cannot run functions, so the app's Subscribe links always
+  point at the Netlify host (`feedHost` in `src/config/league.js`), wherever the app is
+  opened.
 
 ### Icons
 
