@@ -6,6 +6,9 @@ deployment). Newest day on top.
 
 ## 2026-11-08
 
+- **The clock rehearsal in CI runs its seven dates in parallel.** It ran them one after
+  another, which made that job take 3 minutes. Each date is now its own job, with the same
+  dates, the same command, and the same coverage gate, as in the other live viewers.
 - **Every 2027 tip time is back, and a refresh reads them from any time zone.** The league
   prints a tip in the visitor's zone, and GitHub's CI sees Central time, not Arizona's
   MST. The parser required MST, so this morning's CI refresh stored all 52 timed 2027
